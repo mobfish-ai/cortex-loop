@@ -1,0 +1,12 @@
+[Unit]
+Description=cortex-loop heartbeat tick
+
+[Service]
+Type=oneshot
+WorkingDirectory=.
+ExecStart=/usr/bin/python3 bin/cortex-loop tick
+TimeoutStartSec=840
+Environment=PATH=/usr/bin:/bin
+Environment=HTTP_PROXY=
+Environment=HTTPS_PROXY=
+Environment=CORTEX_DEFAULT_EXECUTOR=cheap

@@ -1,0 +1,9 @@
+[Unit]
+Description=cortex-loop heartbeat timer
+
+[Timer]
+OnUnitActiveSec=900
+AccuracySec=30
+
+[Install]
+WantedBy=timers.target

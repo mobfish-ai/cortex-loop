@@ -1,0 +1,48 @@
+{
+  "_meta": {
+    "schema": "cortex.asset-registry/v1",
+    "updated_at": "2099-01-01T00:00:00Z",
+    "discipline": "fixture only; no secrets"
+  },
+  "segments": {
+    "skills": {
+      "count": 1,
+      "source": "skills/SKILLS-TAXONOMY.md"
+    },
+    "tools": {
+      "count": 2,
+      "source": "bin/*.sh|py"
+    },
+    "errors": {
+      "count": 2,
+      "source": "skills/*/ERRORS.md（错题本，按域分布）"
+    },
+    "ledgers": {
+      "count": 1,
+      "source": "**/EXPERIENCE-LEDGER.md（经验台账）"
+    },
+    "discovery_trees": {
+      "count": 2,
+      "source": "**/discovery-trees.jsonl + dt-*.md（发现树，replay 可回放）"
+    },
+    "references": {
+      "count": 2,
+      "source": "skills/*/references/"
+    },
+    "recipes": {
+      "count": 3,
+      "source": "skills/loop-engineering-hub/execution-recipes/ + RECIPE-REGISTRY.md"
+    },
+    "agent_skins": {
+      "count": 44,
+      "source": "cortex-harness 席 AAR-014 同批"
+    },
+    "directions": {
+      "count": 9
+    },
+    "nodes": {
+      "file": "work-studio/devops/infrastructure/data/nodes-registry.json",
+      "count": 1
+    }
+  }
+}

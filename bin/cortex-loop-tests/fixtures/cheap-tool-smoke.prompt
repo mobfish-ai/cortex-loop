@@ -1,0 +1,9 @@
+This is a Cortex executor capability smoke test.
+
+Use the Write tool to create exactly this file:
+/tmp/cortex-cheap-tool-smoke.txt
+
+Its complete content must be:
+CORTEX_TOOL_EXECUTION_OK
+
+Then use the Read tool to verify it. Do not modify any repository file.
