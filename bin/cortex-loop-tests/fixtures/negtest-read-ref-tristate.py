@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-"""EX11 / T34 —— read_ref 与 list_refs 三态返回契约回归。
+"""EX11 / T34 -- regression for the three-state return contract of read_ref and list_refs.
 
-DIMENSIONAL 母题第 5 处：「空」与「查不到」必须可区分，否则下游会拿
-"git 出错"假装"确认无数据"做 health/scanner/done 决策，说谎且不自愈。
+DIMENSIONAL theme, site 5: "empty" and "could not look it up" must stay distinguishable,
+or a downstream health/scanner/done decision will treat "git failed" as "confirmed no data",
+which lies and does not heal itself.
 
-本 fixture 不引诱 git 异常（环境依赖过重且不可重现），改用两条**确定可触**
-的路径断言三态契约：
+This fixture does not induce a git fault (too environment-dependent to reproduce). It asserts
+the three-state contract on two paths that are deterministically reachable:
 
-  1. 已知有 payload 的 ref → status="ok"，payload 非空
-  2. 已知无 ref 的 namespace → status="empty"，refs 列表为空
-  3. 错误态用 mock-monkey-patch `git()` 直接返回非 0 → status="error"，
-     payload 为空。这样回归不需要外部故障注入器，git 调用本身也仍在走。
+  1. a ref known to have a payload -> status="ok", payload non-empty
+  2. a namespace known to have no ref -> status="empty", refs list empty
+  3. the error state monkey-patches `git()` to return non-zero -> status="error",
+     payload empty. The regression needs no external fault injector, and git is still called.
 
-同时覆盖向后兼容：
-  - parse_kv(read_ref(ref)) 仍按字符串切割（ReadRefResult IS str）
-  - [r for r in list_refs(NS)] 仍按列表迭代（ListRefsResult IS list）
+Also covers backward compatibility:
+  - parse_kv(read_ref(ref)) still splits a string (ReadRefResult IS str)
+  - [r for r in list_refs(NS)] still iterates a list (ListRefsResult IS list)
 """
 
 import os
@@ -54,51 +55,51 @@ def check(label, condition, detail=""):
         print("    BAD  %s%s" % (label, (" — %s" % detail) if detail else ""))
 
 
-# 1. 类存在并支持三态枚举
+# 1. The classes exist and support the three-state enum
 check(
-    "ReadRefResult 是 str 子类（向后兼容旧 parse_kv 调用）",
+    "ReadRefResult is a str subclass (old parse_kv callers stay compatible)",
     issubclass(m.ReadRefResult, str),
-    "类型不对，调用方 .split() 会坏",
+    "wrong type; caller .split() would break",
 )
 check(
-    "ListRefsResult 是 list 子类（向后兼容 [r for r in list_refs(NS)]）",
+    "ListRefsResult is a list subclass (old [r for r in list_refs(NS)] stays compatible)",
     issubclass(m.ListRefsResult, list),
-    "类型不对，调用方迭代/索引会坏",
+    "wrong type; caller iteration/indexing would break",
 )
 
-# 2. 构造路径覆盖三个 status 枚举
+# 2. Construction covers the three status values
 ok_inst = m.ReadRefResult("ok", "hello=world")
 empty_inst = m.ReadRefResult("empty", "", "no payload")
 err_inst = m.ReadRefResult("error", "", "git cat-file exit 128")
-check("ReadRefResult status 字段分别可读 ok/empty/error",
+check("ReadRefResult status field reads ok/empty/error",
       (ok_inst.status, empty_inst.status, err_inst.status) == ("ok", "empty", "error"),
-      "实际 %r" % ((ok_inst.status, empty_inst.status, err_inst.status),))
-check("ReadRefResult is_ok/is_empty/is_error 谓词各自独立",
+      "actual %r" % ((ok_inst.status, empty_inst.status, err_inst.status),))
+check("ReadRefResult is_ok/is_empty/is_error predicates are independent",
       (ok_inst.is_ok, empty_inst.is_empty, err_inst.is_error) == (True, True, True),
-      "实际 %r" % ((ok_inst.is_ok, empty_inst.is_empty, err_inst.is_error),))
-check("ReadRefResult str() == payload（parse_kv 兼容）",
+      "actual %r" % ((ok_inst.is_ok, empty_inst.is_empty, err_inst.is_error),))
+check("ReadRefResult str() == payload (parse_kv compatible)",
       str(ok_inst) == "hello=world" and str(empty_inst) == "" and str(err_inst) == "",
-      "实际 %r/%r/%r" % (str(ok_inst), str(empty_inst), str(err_inst)))
-check("ReadRefResult 是 str 实例，parse_kv 仍按行切",
+      "actual %r/%r/%r" % (str(ok_inst), str(empty_inst), str(err_inst)))
+check("ReadRefResult is a str instance, and parse_kv still splits lines",
       m.parse_kv(ok_inst) == {"hello": "world"},
-      "实际 %r" % m.parse_kv(ok_inst))
+      "actual %r" % m.parse_kv(ok_inst))
 
 list_ok = m.ListRefsResult("ok", ["refs/x/a", "refs/x/b"])
 list_empty = m.ListRefsResult("empty", [])
 list_err = m.ListRefsResult("error", [], "for-each-ref timeout")
-check("ListRefsResult 是 list 实例，len/iter 兼容",
+check("ListRefsResult is a list instance; len/iter compatible",
       len(list_ok) == 2 and list(list_empty) == [] and list(list_err) == [],
-      "len/list 行为不对")
-check("ListRefsResult status 三态独立",
+      "len/list behavior is wrong")
+check("ListRefsResult status values are independent",
       (list_ok.status, list_empty.status, list_err.status) == ("ok", "empty", "error"),
-      "实际 %r" % ((list_ok.status, list_empty.status, list_err.status),))
-check("ListRefsResult set() / sorted() / [r for r in] 旧用法兼容",
+      "actual %r" % ((list_ok.status, list_empty.status, list_err.status),))
+check("ListRefsResult set() / sorted() / [r for r in] old usage stays compatible",
       sorted(list_ok) == ["refs/x/a", "refs/x/b"]
       and set(list_ok) == {"refs/x/a", "refs/x/b"}
       and [r for r in list_ok] == ["refs/x/a", "refs/x/b"],
-      "迭代语义不对")
+      "iteration semantics are wrong")
 
-# 3. 真 git 路径 —— 已确认存在 / 已确认不存在的两条 ref
+# 3. Real git path -- one ref known to exist, one known not to exist
 sfx = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(8))
 NS = "refs/swarm/tristate-test-%s" % sfx
 REF = "%s/fakenode" % NS
@@ -126,38 +127,38 @@ def build_local_ref():
 
 
 try:
-    check("本地测试 ref 造得出来", build_local_ref(), "plumbing 失败")
+    check("local test ref can be built", build_local_ref(), "plumbing failed")
 
     r_ok = m.read_ref(REF)
-    check("read_ref 已知存在 → status='ok'", getattr(r_ok, "status", None) == "ok",
+    check("read_ref known to exist -> status='ok'", getattr(r_ok, "status", None) == "ok",
           "status=%r" % getattr(r_ok, "status", None))
-    check("read_ref 已知存在 → payload 含 'node=fakenode'",
-          "node=fakenode" in r_ok, "读到 %r" % str(r_ok)[:80])
+    check("read_ref known to exist -> payload contains 'node=fakenode'",
+          "node=fakenode" in r_ok, "read %r" % str(r_ok)[:80])
 
     r_empty = m.read_ref("%s/never-written" % NS)
-    check("read_ref 已知不存在 → status='empty'（**不是** 'error'）",
+    check("read_ref known to be missing -> status='empty' (**not** 'error')",
           getattr(r_empty, "status", None) == "empty",
           "status=%r reason=%r" % (getattr(r_empty, "status", None),
                                     getattr(r_empty, "reason", None)))
-    check("read_ref 已知不存在 → payload 仍为空串（parse_kv 兼容）",
-          str(r_empty) == "", "实际 %r" % str(r_empty))
+    check("read_ref known to be missing -> payload is still the empty string (parse_kv compatible)",
+          str(r_empty) == "", "actual %r" % str(r_empty))
 
     lr_ok = m.list_refs(NS)
-    check("list_refs 已知 ns → status='ok'", getattr(lr_ok, "status", None) == "ok",
+    check("list_refs known ns -> status='ok'", getattr(lr_ok, "status", None) == "ok",
           "status=%r" % getattr(lr_ok, "status", None))
-    check("list_refs 已知 ns → refs 列表含 [REF]",
-          list(lr_ok) == [REF], "实际 %r" % list(lr_ok))
+    check("list_refs known ns -> refs list is [REF]",
+          list(lr_ok) == [REF], "actual %r" % list(lr_ok))
 
     lr_empty = m.list_refs("refs/swarm/tristate-empty-%s" % sfx)
-    check("list_refs 已知空 ns → status='empty'（**不是** 'error'）",
+    check("list_refs known-empty ns -> status='empty' (**not** 'error')",
           getattr(lr_empty, "status", None) == "empty",
           "status=%r" % getattr(lr_empty, "status", None))
-    check("list_refs 已知空 ns → refs 列表为 []（迭代兼容）",
-          list(lr_empty) == [], "实际 %r" % list(lr_empty))
+    check("list_refs known-empty ns -> refs list is [] (iteration compatible)",
+          list(lr_empty) == [], "actual %r" % list(lr_empty))
 
-    # 4. 错误态 —— 只让 cat-file / for-each-ref 命令失败，
-    #    rev-parse 仍要返回真 sha（不然 read_ref 在 rev_ref 处就 short-circuit 走 empty，
-    #    测不到 cat-file 失败这条真正的错误路径）。
+    # 4. Error state -- fail only cat-file / for-each-ref.
+    #    rev-parse must still return a real sha (otherwise read_ref short-circuits to empty
+    #    at rev_ref, and the real cat-file failure path is never tested).
     orig_git = m.git
 
     def git_fail(cmd, *a, **kw):
@@ -168,26 +169,26 @@ try:
     m.git = git_fail
     try:
         r_err = m.read_ref(REF)
-        check("read_ref cat-file 出错 → status='error'（**不**坍缩为 empty）",
+        check("read_ref cat-file error -> status='error' (**not** collapsed to empty)",
               getattr(r_err, "status", None) == "error",
               "status=%r reason=%r" % (getattr(r_err, "status", None),
                                         getattr(r_err, "reason", None)))
-        check("read_ref cat-file 出错 → payload 仍为空串（parse_kv 不崩）",
-              str(r_err) == "", "实际 %r" % str(r_err))
+        check("read_ref cat-file error -> payload is still the empty string (parse_kv does not crash)",
+              str(r_err) == "", "actual %r" % str(r_err))
 
-        # list_refs 错误态
+        # list_refs error state
         lr_err = m.list_refs(NS)
-        check("list_refs for-each-ref 出错 → status='error'（**不**坍缩为 empty）",
+        check("list_refs for-each-ref error -> status='error' (**not** collapsed to empty)",
               getattr(lr_err, "status", None) == "error",
               "status=%r reason=%r" % (getattr(lr_err, "status", None),
                                         getattr(lr_err, "reason", None)))
-        check("list_refs for-each-ref 出错 → refs 为 []（迭代兼容）",
-              list(lr_err) == [], "实际 %r" % list(lr_err))
+        check("list_refs for-each-ref error -> refs is [] (iteration compatible)",
+              list(lr_err) == [], "actual %r" % list(lr_err))
 
-        # 三态互不重合（关键防回归点：别让 error 又被合并回 empty）
+        # The three states do not overlap (regression point: do not merge error back into empty)
         s_err = getattr(r_err, "status", None)
         s_empty = "empty"
-        check("错误态 status ≠ 'empty'（DIMENSIONAL 律第三态不可坍缩）",
+        check("error status != 'empty' (DIMENSIONAL third state must not collapse)",
               s_err != s_empty, "status=%r" % s_err)
     finally:
         m.git = orig_git
@@ -195,10 +196,10 @@ try:
 finally:
     m.git("update-ref -d %s" % REF)
     left = m.git("for-each-ref --format='%(refname)' " + NS)[1].strip()
-    print("    清理：%s → %s" % (NS, "已清空" if not left else "残留 %s" % left))
+    print("    cleanup: %s -> %s" % (NS, "cleared" if not left else "left %s" % left))
 
 if FAILURES:
-    print("断言失败 %d 条：%s" % (len(FAILURES), " / ".join(FAILURES)))
+    print("%d assertions failed: %s" % (len(FAILURES), " / ".join(FAILURES)))
     raise SystemExit(1)
-print("T34 三态回归：全绿")
+print("T34 three-state regression: ALL PASS")
 raise SystemExit(0)

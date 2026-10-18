@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""cortex-loop MCP — 把蜂群能力暴露给外部 AI，走的是同一道六定律门。
+"""cortex-loop MCP — expose swarm capabilities to an external AI through the same six-laws gate.
 
-设计铁律（改之前先想清楚再改）：
-  1. **本文件不含任何业务逻辑**。它只把 MCP 的 JSON-RPC 转译成 `cortex-loop api <verb>`。
-     一旦这里出现第二套判断，就等于开了旁路 —— 对内一套标准、对外另一套，正是要防的。
-  2. 鉴权不在这里做。caller 身份原样透传给 api 层，由 covenant_check / VERB_POLICY 裁决。
-  3. 外部调用者与内部节点**同一套 HAAS 信任**：首次调用 = L1 = 只能读，
-     写权限靠历史积累或人类 approved_by 签发。
+Design rules (think them through before changing this file):
+  1. **This file contains no business logic.** It only translates MCP JSON-RPC into `cortex-loop api <verb>`.
+     A second set of judgments here would open a bypass -- one standard inside, another outside, which is what this prevents.
+  2. Auth is not done here. The caller identity is passed through to the api layer, which decides via covenant_check / VERB_POLICY.
+  3. External callers and internal nodes share **the same HAAS trust**: first call = L1 = read only,
+     and write permission comes from history or a human approved_by grant.
 
-用法（stdio MCP server）：
+Usage (stdio MCP server):
     python3 bin/cortex-loop-mcp.py
 
-真相源：bin/cortex-loop（api 子命令 + VERB_POLICY）· aboutme/methods/mobfish-six-laws.md
+Source of truth: bin/cortex-loop (api subcommand + VERB_POLICY) | aboutme/methods/mobfish-six-laws.md
 """
 
 import json
@@ -22,14 +22,14 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENGINE = os.path.join(ROOT, "bin", "cortex-loop")
 
-# 只暴露只读 verb。写类 verb 需要 L3+ 信任，且应经由节点自身执行 ——
-# 让外部 AI 直接触发执行，等于把额度与副作用交给一个 L1 陌生人。
+# Expose read-only verbs only. Write verbs need L3+ trust and should run on the node itself --
+# letting an external AI trigger execution hands quota and side effects to an L1 stranger.
 EXPOSED = {
-    "swarm": "蜂群节点存活表：谁在线、什么形态、负责哪条线、具备哪些能力",
-    "caps": "能力矩阵：全群能力并集、逐节点分布、单点能力告警",
-    "trust": "信任等级：各节点 HAAS 实算分数与 L1-L5 等级（历史算出，非自报）",
-    "value": "价值构成：V1 线性 / V2 杠杆 / V3 涌现 的分布与杠杆率",
-    "gather": "计划汇总：各分布式计划的完成进度",
+    "swarm": "swarm node liveness: who is online, what shape, which line they own, which capabilities they have",
+    "caps": "capability matrix: union across the swarm, per-node spread, single-point capability alerts",
+    "trust": "trust level: each node's computed HAAS score and L1-L5 grade (from history, not self-reported)",
+    "value": "value mix: distribution and leverage of V1 linear / V2 leverage / V3 emergent",
+    "gather": "plan rollup: completion progress of each distributed plan",
 }
 
 
@@ -40,7 +40,7 @@ def call_engine(verb, caller):
     try:
         return json.loads(proc.stdout)
     except json.JSONDecodeError:
-        return {"ok": False, "error": "引擎输出非 JSON",
+        return {"ok": False, "error": "engine output is not JSON",
                 "stdout": proc.stdout[-500:], "stderr": proc.stderr[-500:]}
 
 
@@ -57,13 +57,13 @@ def respond(req_id, result=None, error=None):
 def tool_list():
     return {"tools": [{
         "name": "cortex_loop_%s" % verb,
-        "description": "%s（调用方需自报 caller 身份；信任不足会被六定律 C2 拦下）" % desc,
+        "description": "%s (caller must supply a caller identity; insufficient trust is blocked by six-laws C2)" % desc,
         "inputSchema": {
             "type": "object",
             "properties": {"caller": {
                 "type": "string",
-                "description": "调用方稳定标识。首次调用信任为 L1（只读）；"
-                               "信任按该 caller 的历史记录实算，无法自报。"}},
+                "description": "Stable caller id. First call is trust L1 (read-only); "
+                               "trust is computed from that caller's history and cannot be self-reported."}},
             "required": ["caller"],
         },
     } for verb, desc in sorted(EXPOSED.items())]}
@@ -92,13 +92,13 @@ def main():
             caller = (params.get("arguments") or {}).get("caller", "").strip()
             verb = name.replace("cortex_loop_", "")
             if verb not in EXPOSED:
-                respond(req_id, error={"code": -32601, "message": "未暴露的 verb: %s" % verb})
+                respond(req_id, error={"code": -32601, "message": "verb not exposed: %s" % verb})
                 continue
             if not caller:
-                # 匿名 = 无法积累信任 = 无法问责。六定律里没有匿名这一档。
+                # Anonymous means no trust can accumulate and nobody can be held accountable. The six laws have no anonymous tier.
                 respond(req_id, error={"code": -32602,
-                                       "message": "必须提供 caller 身份：匿名调用无法积累信任，"
-                                                  "也无法问责，六定律里没有匿名这一档"})
+                                       "message": "caller identity is required: an anonymous call cannot accumulate trust "
+                                                  "and cannot be held accountable; the six laws have no anonymous tier"})
                 continue
             out = call_engine(verb, caller)
             respond(req_id, {"content": [{"type": "text",
@@ -107,7 +107,7 @@ def main():
         elif method and method.startswith("notifications/"):
             continue
         elif req_id is not None:
-            respond(req_id, error={"code": -32601, "message": "未实现: %s" % method})
+            respond(req_id, error={"code": -32601, "message": "not implemented: %s" % method})
 
 
 if __name__ == "__main__":

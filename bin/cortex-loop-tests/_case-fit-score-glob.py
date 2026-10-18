@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""I17 — fit_score 改 glob 匹配后：现有任务判定结果逐条不变 + 通配确实生效。
+"""I17 -- after fit_score switches to glob matching: existing tasks keep the same verdicts, and wildcards really work.
 
-背景：`bin/cortex-loop` fit_score 原来对 requires 做字面差集 `need - have`，
-新任务写不出模式串（如 "model.anthropic.*"），只能退化成 "exec.claude" 这种
-最粗写法。改成 fnmatch 后，精确串（旧任务全部这么写）行为与 `==` 完全一致，
-新任务才能用通配符——这条用例既要证明"零回归"，也要证明"通配真的生效"。
+Background: `bin/cortex-loop` fit_score used to subtract requires literally (`need - have`),
+so a new task could not write a pattern (such as "model.anthropic.*") and had to fall back to a coarse
+token like "exec.claude". After fnmatch, an exact string (how every old task is written) behaves exactly like `==`,
+and only new tasks can use wildcards. This case must prove both zero regression and that wildcards really match.
 
-只读：不写任何文件、不碰真账本、不动网络。
+Read-only: writes no files, does not touch the real ledger, and does not use the network.
 """
 
 import os
@@ -27,37 +27,37 @@ def score(requires_str, have=HAVE, load_=0, max_load=3):
     return m.fit_score(task, {"caps": " ".join(have)}, load_, max_load)
 
 
-# ── 零回归：现有任务精确串写法，改前改后判定必须一致 ─────────────────────
+# -- zero regression: exact strings on existing tasks must verdict the same before and after --
 ok, why = score("-")
-check("旧写法 requires=- → 无要求，可认领", ok is not None, why)
+check("old form requires=- -> no requirements, claimable", ok is not None, why)
 
 ok, why = score("exec.claude")
-check("旧写法 requires=exec.claude（有）→ 可认领", ok is not None, why)
+check("old form requires=exec.claude (present) -> claimable", ok is not None, why)
 
 ok, why = score("exec.human")
-check("旧写法 requires=exec.human（没有）→ 缺能力拒绝", ok is None, why)
-check("拒绝理由原样报出缺的能力名（非 glob 污染）",
-      why == "缺能力 exec.human", "实际: %r" % why)
+check("old form requires=exec.human (absent) -> rejected for a missing capability", ok is None, why)
+check("the refusal names the missing capability as-is (no glob pollution)",
+      why == "missing capability exec.human", "actual: %r" % why)
 
-# ── 新能力：通配符真的生效（不是形同虚设）───────────────────────────────
+# -- new capability: wildcards really match (they are not a no-op) --
 ok, why = score("model.anthropic.*")
-check("新写法 model.anthropic.* 通配命中 model.anthropic.claude-opus-5",
+check("new form model.anthropic.* matches model.anthropic.claude-opus-5",
       ok is not None, why)
 
 ok, why = score("model.google.*")
-check("通配不该无差别放行——没有的 provider 仍应拒绝", ok is None, why)
+check("a wildcard must not pass everything -- a missing provider is still refused", ok is None, why)
 
 ok, why = score("net.github.fast")
-check("精确串 net.github.fast（有）→ 可认领", ok is not None, why)
+check("exact string net.github.fast (present) -> claimable", ok is not None, why)
 
 ok, why = score("net.github.slow")
-check("精确串 net.github.slow（没有，节点是 fast）→ 拒绝", ok is None, why)
+check("exact string net.github.slow (absent; this node is fast) -> refused", ok is None, why)
 
-# ── 混合：一个 requires 里既有精确串也有通配串，必须同时满足 ────────────
+# -- mixed: one requires list with both an exact string and a wildcard must satisfy both --
 ok, why = score("exec.claude model.anthropic.*")
-check("混合 requires（精确+通配）全满足 → 可认领", ok is not None, why)
+check("mixed requires (exact + wildcard) all satisfied -> claimable", ok is not None, why)
 
 ok, why = score("exec.claude model.openai.gpt-*")
-check("混合 requires 里通配那半没命中 → 整体拒绝", ok is None, why)
+check("mixed requires whose wildcard half misses -> refused as a whole", ok is None, why)
 
 finish()

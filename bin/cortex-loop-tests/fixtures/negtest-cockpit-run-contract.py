@@ -43,7 +43,7 @@ with tempfile.TemporaryDirectory(prefix="cortex-cockpit-binding-") as tmp:
     shutil.copy2(ROOT / "bin/control-plane-cockpit.py", cockpit)
 
     (repo / "brain-network/agents/alfred/topics/cso/CONTROL-BOARD.md").write_text(
-        "control_plane_id: alfred-cso\n\n### 窗口清单\n",
+        "control_plane_id: alfred-cso\n\n### window list\n",
         encoding="utf-8",
     )
     (repo / "brain-network/agents/alfred/topics/cso/evidence/EMPTY-QUEUE.jsonl").write_text(

@@ -159,16 +159,16 @@ with tempfile.TemporaryDirectory(prefix=".cortex-task-atoms-", dir=ROOT) as tmp:
     captured_prompt = {}
     def fake_diagnose_adapter(_executor, _tag, prompt, **_kwargs):
         captured_prompt["text"] = prompt
-        return "建议状态: blocked 需要继续修根因"
+        return "suggested state: blocked, keep fixing the root cause"
     loop.run_adapter = fake_diagnose_adapter
     loop.ai_diagnose(
         "testline", "cheap", recovered, 4,
-        failure={"stage": "judge", "rc": 1, "detail": "delta 应为 53.4%"},
+        failure={"stage": "judge", "rc": 1, "detail": "delta should be 53.4%"},
     )
     assert loop._task_or_error("testline", "T4")["status"] == "pending", \
         "free-form diagnosis must not mutate scheduler state"
-    assert "真实失败阶段：judge" in captured_prompt["text"]
-    assert "delta 应为 53.4%" in captured_prompt["text"]
+    assert "real failure stage: judge" in captured_prompt["text"]
+    assert "delta should be 53.4%" in captured_prompt["text"]
 
     sentinel_dir = directions / "sentinel-line"
     sentinel_dir.mkdir()
@@ -263,14 +263,14 @@ with tempfile.TemporaryDirectory(prefix=".cortex-controller-gates-", dir=ROOT) a
         loop.DIRECTIONS = str(repo / "brain-network/directions")
         loop.FAILURE_STATE = str(repo / ".git/cortex-loop-state/failures.json")
         loop.auto_credit_decided = lambda *_args, **_kwargs: None
-        # 本段只测 clean/commit/origin 三验，不重复测试事务提交器。
+        # This block only tests the clean/commit/origin checks, not the transaction committer again.
         loop.land_task_artifacts = lambda *_args, **_kwargs: (True, "fixture bypass")
 
-        # 三验正向：clean + tracked commit binding + local bare origin reachable。
+        # Positive three-check: clean + tracked commit binding + local bare origin reachable.
         assert loop.cmd_try_complete(
             argparse.Namespace(line="gates", task="T1", judge=False)) == 0
 
-        # clean 负测：工作区改动即使 short_test 通过也不得 done。
+        # Clean negative: a dirty worktree must not become done even if short_test passes.
         loop.set_cell(str(tasks_file), "T1", "status", "pending")
         (repo / "reports/out.md").write_text("dirty artifact\n")
         assert loop.cmd_try_complete(
@@ -278,12 +278,12 @@ with tempfile.TemporaryDirectory(prefix=".cortex-controller-gates-", dir=ROOT) a
         assert loop.cmd_try_complete.last_failure["stage"] == "artifact-clean"
         git_run("checkout", "--", "reports/out.md")
 
-        # commit binding 负测：被 .gitignore 隐藏的文件 status clean，但没有 tracked blob。
+        # Commit-binding negative: a file hidden by .gitignore is status-clean, but has no tracked blob.
         assert loop.cmd_try_complete(
             argparse.Namespace(line="gates", task="T2", judge=False)) == 1
         assert loop.cmd_try_complete.last_failure["stage"] == "commit-binding"
 
-        # origin 负测→正测：本地 commit 未 push 必须红，push 后同一门才可绿。
+        # Origin negative then positive: a local commit that is not pushed must stay red; the same gate goes green after push.
         (repo / "reports/local.md").write_text("local-only revision\n")
         git_run("add", "reports/local.md")
         git_run("commit", "-m", "local artifact revision")
@@ -295,12 +295,12 @@ with tempfile.TemporaryDirectory(prefix=".cortex-controller-gates-", dir=ROOT) a
         assert loop.cmd_try_complete(
             argparse.Namespace(line="gates", task="T3", judge=False)) == 0
 
-        # 日上限跨拍累计；第 cap+1 次必须 fail closed。
+        # The daily cap accumulates across ticks; attempt cap+1 must fail closed.
         ok1, used1, _ = loop.reserve_daily_advance("daily-line", 2)
         ok2, used2, _ = loop.reserve_daily_advance("daily-line", 2)
         ok3, used3, reason3 = loop.reserve_daily_advance("daily-line", 2)
         assert (ok1, used1, ok2, used2) == (True, 1, True, 2)
-        assert not ok3 and used3 == 2 and "上限" in reason3
+        assert not ok3 and used3 == 2 and "calendar-day cap" in reason3
         saved_now = loop.now
         tomorrow = saved_now() + loop.timedelta(days=1)
         loop.now = lambda: tomorrow
@@ -310,7 +310,7 @@ with tempfile.TemporaryDirectory(prefix=".cortex-controller-gates-", dir=ROOT) a
         finally:
             loop.now = saved_now
 
-        # 并发正负测：4 个节点同时预占 cap=2，CAS 后只能恰好 2 个成功。
+        # Concurrent positive and negative: 4 nodes reserve cap=2 at once; after CAS exactly 2 succeed.
         race_results = []
         race_lock = threading.Lock()
         def reserve_race():
@@ -324,7 +324,7 @@ with tempfile.TemporaryDirectory(prefix=".cortex-controller-gates-", dir=ROOT) a
             thread.join()
         assert sum(1 for ok, _used, _why in race_results if ok) == 2, race_results
 
-        # 失败上下文不再依赖 /tmp：脱敏、跨重新读取、有界 128 条。
+        # Failure context no longer depends on /tmp: redacted, reread across a restart, bounded to 128 rows.
         saved = loop.persist_failure_context(
             "gates", "T1",
             {"stage": "adapter", "rc": 7,
@@ -335,7 +335,7 @@ with tempfile.TemporaryDirectory(prefix=".cortex-controller-gates-", dir=ROOT) a
         restart_prompt = {}
         saved_adapter = loop.run_adapter
         loop.run_adapter = lambda _executor, _tag, prompt, **_kwargs: (
-            restart_prompt.setdefault("text", prompt) or "根因: fixture"
+            restart_prompt.setdefault("text", prompt) or "root cause: fixture"
         )
         try:
             # Keep the diagnostic integration bound to the fixture's task row.
@@ -357,7 +357,7 @@ with tempfile.TemporaryDirectory(prefix=".cortex-controller-gates-", dir=ROOT) a
             )
         finally:
             loop.run_adapter = saved_adapter
-        assert "真实失败阶段：adapter" in restart_prompt["text"]
+        assert "real failure stage: adapter" in restart_prompt["text"]
         assert "secret-value" not in restart_prompt["text"]
         for idx in range(140):
             loop.persist_failure_context(

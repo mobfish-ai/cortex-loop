@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
 # cortex-loop:requires-env PATH
-# cortex-loop adapter: cheap — GLM-backed coding agent（能真实读写/执行）
-# 约定接口：$1=提示词文件  $2=结果文件
+# cortex-loop adapter: cheap — GLM-backed coding agent (can really read, write, and execute)
+# Contract: $1=prompt file  $2=result file
 #
-# 关键边界：raw minimax.sh/glm.sh 只有文本生成能力，不能 Read/Edit/Bash。
-# 把它们接到自动推进会造成「模型写了一段建议，账本却误记为执行」。
-# 本 adapter 因此只走 Claude Code CLI 的工具层，但 provider/model 由本 adapter
-# 自己在子进程 env 里注入（ANTHROPIC_BASE_URL/AUTH_TOKEN/MODEL），直接从 CC
-# Switch 的 SQLite(~/.cc-switch/cc-switch.db)读匹配账号轮转（现＝「Zhipu GLM」，
-# 端点 open.bigmodel.cn/api/anthropic，Coding Plan 计费）——
-# **不再依赖** ~/.claude/settings.json 被 GUI 手动点"启用"。
+# Boundary: raw minimax.sh/glm.sh can only generate text; they cannot Read/Edit/Bash.
+# Wiring them into auto-advance makes the ledger record a suggestion as if it were execution.
+# This adapter therefore uses only the Claude Code CLI tool layer, but this adapter
+# injects provider/model in the child env (ANTHROPIC_BASE_URL/AUTH_TOKEN/MODEL) and rotates
+# matching accounts read from CC Switch SQLite (~/.cc-switch/cc-switch.db) (currently "Zhipu GLM",
+# endpoint open.bigmodel.cn/api/anthropic, Coding Plan billing) --
+# **no longer depends** on someone clicking Enable on ~/.claude/settings.json in the GUI.
 #
-# 2026-07-31 根因记录：旧版靠 settings.json 由人在 CC Switch GUI 里点开关才生效，
-# 无人值守心跳没人替它点；实测 settings.json 当时指向 Claude Official，adapter
-# 传了个官方端点不认识的模型名，FAIL rc=1 是必然结果——整晚 0 次 adapter PASS。
-# 若工具层不可用就硬失败，绝不降级成只会说不会做的 raw completion。
+# 2026-07-31 root cause: the old path worked only after a human toggled CC Switch GUI,
+# and an unattended heartbeat has nobody to click it. settings.json pointed at Claude Official while the adapter
+# sent a model name that endpoint does not know, so FAIL rc=1 was certain -- 0 adapter PASS all night.
+# If the tool layer is unavailable, fail hard. Never fall back to a raw completion that can talk but not act.
 #
-# 2026-10-05 operator 拍板：MiniMax 4 个账号全部失效（API 400 [1211]「模型不存在」，
-# 账号已停），cheap 链整体切「Zhipu GLM」glm-5.3-flash；下条 2026-07-30
-# 「MiniMax 优先于 GLM」拍板随之作废。原 MiniMax 账号仍留在 CC Switch 备查。
+# 2026-10-05 operator decision: all 4 MiniMax accounts are dead (API 400 [1211] "model does not exist",
+# accounts stopped). The cheap chain moves entirely to "Zhipu GLM" glm-5.3-flash. The 2026-07-30
+# "MiniMax before GLM" decision below is void. The old MiniMax accounts stay in CC Switch for reference.
 #
-# 2026-07-30 operator 拍板（已作废，见上）：MiniMax 优先于 GLM（4 个账号额度更充裕）。
-# 要把这个 adapter 接成 cortex-loop 的真正默认执行器，需要
-# `export CORTEX_DEFAULT_EXECUTOR=cheap`（cmd_run() 读取，优先级高于 node profile
-# 自动发现）——node_profile() 的自动发现表不在本线域内，未改，见任务报告 §G1 末尾。
+# 2026-07-30 operator decision (void, see above): MiniMax before GLM (4 accounts had more quota).
+# To make this adapter the real default cortex-loop executor, set
+# `export CORTEX_DEFAULT_EXECUTOR=cheap` (read by cmd_run(), higher priority than node profile
+# auto-discovery) -- node_profile()'s discovery table is outside this line and was not changed; see task report section G1.
 set -uo pipefail
 export PATH="$HOME/.local/bin:$HOME/.nvm/versions/node/v22.22.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
@@ -67,7 +67,7 @@ if [[ -z "$ORDERED" ]]; then
     printf 'no-ccswitch-glm-account\n' >&2
     exit 89
   fi
-  printf '[adapter] executor=cheap rc=89 reason=no-ccswitch-account 提示：~/.cc-switch/cc-switch.db 未找到 GLM 账号（pattern=Zhipu GLM%%）\n' > "$RESULT"
+  printf '[adapter] executor=cheap rc=89 reason=no-ccswitch-account hint: no GLM account in ~/.cc-switch/cc-switch.db (pattern=Zhipu GLM%%)\n' > "$RESULT"
   exit 89
 fi
 if [[ "${1:-}" == "--check-ready" ]]; then
@@ -145,9 +145,9 @@ terminate_worker() {
 trap cleanup EXIT
 trap terminate_worker INT TERM
 
-# ── usage 强制落盘（IMM-T45）──────────────────────────────────────────
-# run-report 扫 result 里 "input_tokens"/"output_tokens" 数字；缺字段=UNKNOWN 能量，
-# 不是静默当 0。凡写 RESULT 必带一行 [usage] JSON（known 或 UNKNOWN，三态不坍缩）。
+# ── usage must be written to disk (IMM-T45) ─────────────────────────────
+# run-report scans result for "input_tokens"/"output_tokens" numbers; a missing field is UNKNOWN energy,
+# not a silent 0. Every write to RESULT must include one [usage] JSON line (known or UNKNOWN; three states do not collapse).
 cheap_write_result_with_usage() {
   # $1=raw attempt file  $2=final RESULT  $3=extra footer lines (optional, via stdin not used)
   local raw="$1" dest="$2"
@@ -160,7 +160,7 @@ text = raw
 usage = None
 source = "absent"
 reason = "no-json-usage"
-# 1) 整文件 JSON（--output-format json）
+# 1) whole-file JSON (--output-format json)
 try:
     data = json.loads(raw)
     if isinstance(data, dict):
@@ -173,7 +173,7 @@ try:
             source = "claude-json"
             reason = "ok"
 except json.JSONDecodeError:
-    # 2) 尾部/行内 JSON 对象含 usage
+    # 2) a JSON object at the tail or inline that contains usage
     for m in re.finditer(r"\{[^{}]*\"usage\"\s*:\s*\{[^{}]+\}[^{}]*\}", raw, re.S):
         try:
             data = json.loads(m.group(0))
@@ -185,7 +185,7 @@ except json.JSONDecodeError:
                 break
         except json.JSONDecodeError:
             continue
-    # 3) 裸 "input_tokens": N
+    # 3) a bare "input_tokens": N
     if usage is None:
         mi = re.search(r'"input_tokens"\s*:\s*(\d+)', raw)
         mo = re.search(r'"output_tokens"\s*:\s*(\d+)', raw)
@@ -224,7 +224,7 @@ else:
         "source": source,
         "reason": reason,
     }
-# 数字键再写一份纯数字形态，供 run-report 旧 regex 命中（UNKNOWN 时不写数字键）
+# Also write numeric keys as plain numbers so the old run-report regex hits (do not write numeric keys when UNKNOWN)
 if isinstance(payload["input_tokens"], int):
     payload["prompt_tokens"] = payload["input_tokens"]
 if isinstance(payload["output_tokens"], int):
@@ -245,12 +245,12 @@ ATTEMPT_RESULT="$(mktemp /tmp/oc-cheap-attempt.XXXXXX)"
 ATTEMPT_ERR="$(mktemp /tmp/oc-cheap-attempt-err.XXXXXX)"
 while IFS=$'\t' read -r label base_url acct_model token hash; do
   [[ -z "$label" ]] && continue
-  # 一个 MiniMax 账号同一时刻只给一个 Worker。匿名并发槽只控制总吞吐，
-  # account lease 才能避免多个 Worker 同撞排序第一账号、429 而其它账号闲置。
+  # One MiniMax account is given to only one Worker at a time. Anonymous concurrency slots only cap total throughput.
+  # An account lease stops several Workers from all hitting the first-ranked account and 429 while other accounts sit idle.
   acquire_account_lock "$hash" || continue
   attempts=$((attempts + 1))
   model="${FORCE_MODEL:-$acct_model}"
-  # stdout 单独收 JSON；stderr 不污染解析（IMM-T45）
+  # stdout receives JSON alone; stderr must not pollute the parse (IMM-T45)
   ANTHROPIC_BASE_URL="$base_url" ANTHROPIC_AUTH_TOKEN="$token" ANTHROPIC_MODEL="$model" \
   ANTHROPIC_DEFAULT_SONNET_MODEL="$model" ANTHROPIC_DEFAULT_OPUS_MODEL="$model" \
   ANTHROPIC_DEFAULT_HAIKU_MODEL="$model" \
@@ -272,7 +272,7 @@ while IFS=$'\t' read -r label base_url acct_model token hash; do
   rc=$?
   if [[ $rc -eq 0 ]]; then
     oc_mark_success "$CCSWITCH_STATE" "$hash"
-    # 若 json 解析失败仍把原文+stderr 拼进 raw 再强制 usage
+    # If JSON parse fails, still splice the raw text plus stderr into raw, then force usage
     if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$ATTEMPT_RESULT" 2>/dev/null; then
       { cat "$ATTEMPT_RESULT"; echo; echo "--- stderr ---"; cat "$ATTEMPT_ERR"; } > "${ATTEMPT_RESULT}.merged"
       mv "${ATTEMPT_RESULT}.merged" "$ATTEMPT_RESULT"
@@ -280,7 +280,7 @@ while IFS=$'\t' read -r label base_url acct_model token hash; do
     cheap_write_result_with_usage "$ATTEMPT_RESULT" "$RESULT" >/dev/null
     printf '\n[adapter] executor=cheap provider=glm account=%s tool_layer=claude-code model=%s attempt=%s/? rc=0\n' \
       "$label" "$model" "$attempts" >> "$RESULT"
-    # 二次确保：adapter 行之后若缺 [usage] 再补（防被后续改写）
+    # Second check: if [usage] is missing after the adapter line, append it (in case a later write dropped it)
     if ! grep -q '^\[usage\]' "$RESULT" 2>/dev/null; then
       printf '\n[usage] {"input_tokens":"UNKNOWN","output_tokens":"UNKNOWN","status":"UNKNOWN","source":"footer-guard","reason":"missing-after-adapter-line"}\n' >> "$RESULT"
     fi
@@ -307,10 +307,10 @@ if [[ $attempts -eq 0 ]]; then
   exit 75
 fi
 
-printf '\n[adapter] executor=cheap provider=glm 全部 %s 个账号失败：%s\n' \
+printf '\n[adapter] executor=cheap provider=glm all %s accounts failed: %s\n' \
   "$attempts" "$summary" >> "$RESULT"
 printf '[adapter] executor=cheap rc=98\n' >> "$RESULT"
-# 失败路径也强制 usage（UNKNOWN 合法，倒向 0 非法）
+# The failure path also forces usage (UNKNOWN is legal; collapsing to 0 is not)
 if ! grep -q '^\[usage\]' "$RESULT" 2>/dev/null; then
   printf '\n[usage] {"input_tokens":"UNKNOWN","output_tokens":"UNKNOWN","status":"UNKNOWN","source":"all-accounts-failed","reason":"rc=98"}\n' >> "$RESULT"
 fi

@@ -5,89 +5,90 @@ status: active
 type: expectations
 updated: "2026-07-30"
 ---
+English | [简体中文](EXPECTATIONS.zh-CN.md)
 
-# cortex-loop 期待清单（能力缺口与结项证据）
+# cortex-loop expectations list (capability gaps and closeout evidence)
 
-> **这不是 TODO。** TODO 是「已经拆好、有人认领、有 `short_test`」的活 —— 那些住在
-> [[brain-network/directions/loop-ops/TASKS|TASKS.md]]，由环自己推。
-> **本文件装的是「知道该有的能力及其当前证据状态」**。`met` 保留结项证据，
-> `gap/unknown` 只有同时具备 owner 与 `short_test` 才能进入自动执行候选；
-> 否则只负责让缺口持续可见，不会被 `tick` 猜着推进。
+> **This is not a TODO.** A TODO is work that is already decomposed, already claimed, and already has a `short_test`. Those live in
+> [[brain-network/directions/loop-ops/TASKS|TASKS.md]] and are pushed by the loop itself.
+> **This file holds "capabilities we know we should have, and their current evidence state".** `met` keeps the closeout evidence.
+> `gap` / `unknown` can enter the automatic-execution candidate set only when both an owner and a `short_test` are present.
+> Otherwise the file's only job is to keep the gap visible. `tick` will not guess its way forward.
 >
-> **为什么放在 `skills/cortex-loop/` 而不是 `directions/loop-ops/`**：
-> 期待是「这套能力还差什么」，属 Skill 家族的第四个成员 ——
-> [[cortex-loop/SKILL|SKILL]] 记已具备 · [[cortex-loop/ERRORS|ERRORS]] 记已犯的错 ·
-> [[cortex-loop/JOURNAL|JOURNAL]] 记已发生的 · **本文件记还没具备的**。
-> 放进 `directions/loop-ops/` 会撞两件事：① `TASKS.md` 是**机器消费**的账本，
-> 混进没判据的条目会被当成待派任务；② `CHARTER-SWARM.md` 拥有 S1 G1–G6 的定义权，
-> 本文件只**引用**阶段目标，不重复定义。终局方向归 [[cortex-loop/INTENT|INTENT]]。
+> **Why this lives in `skills/cortex-loop/` rather than `directions/loop-ops/`**:
+> an expectation is "what this capability set still lacks". It is the fourth member of the Skill family —
+> [[cortex-loop/SKILL|SKILL]] records what is already in place · [[cortex-loop/ERRORS|ERRORS]] records mistakes already made ·
+> [[cortex-loop/JOURNAL|JOURNAL]] records what already happened · **this file records what is not yet in place**.
+> Putting it in `directions/loop-ops/` collides with two things: (1) `TASKS.md` is a ledger **consumed by the machine**;
+> an entry with no criterion would be treated as a task waiting to be dispatched; (2) `CHARTER-SWARM.md` owns the definition of S1 G1–G6;
+> this file only **cites** stage targets and does not redefine them. Terminal direction belongs to [[cortex-loop/INTENT|INTENT]].
 >
-> **机器怎么读**：`python3 bin/cortex-loop-expectations.py --json`
-> 退出码 `0`=全部 met / `1`=有 gap / `2`=有 unknown（三态，UNKNOWN 不倒向任何一边）。
+> **How the machine reads it**: `python3 bin/cortex-loop-expectations.py --json`
+> Exit code `0` = all met / `1` = a gap exists / `2` = an unknown exists (three-state; UNKNOWN does not collapse toward either side).
 
 ---
 
-## A · 阶段证据状态
+## A · Stage evidence status
 
-> 本节只追踪 [[brain-network/directions/loop-ops/CHARTER-SWARM|CHARTER-SWARM]] 的 S1 阶段指标；终局北极星见 [[cortex-loop/INTENT|INTENT]]。
+> This section tracks only the S1 stage metrics in [[brain-network/directions/loop-ops/CHARTER-SWARM|CHARTER-SWARM]]. The terminal north star is in [[cortex-loop/INTENT|INTENT]].
 
-| id | 期待 | 目标 | 现状 | 状态 | 缺口 / 前置 | owner | short_test |
+| id | expectation | target | current | state | gap / prerequisite | owner | short_test |
 |----|------|------|------|------|-------------|-------|------------|
-| EX01 | G2 机械过门率 | 24 小时滚动窗、最小样本 15、目标 ≥90% | 已批准；全历史累计仅作战绩，不作目标 | **met** | origin 可读的滚动 cohort；`python3 bin/cortex-metrics.py --json` |
-| EX02 | G1 自愈闭环率 | frozen eligible discovery 与 passed result 同 lineage | origin discovery/result/learning 三源已读通，真机 clock-auto lineage 已形成；当前数量由量具实时读取 | **met** | `BASELINE` 只表示滚动窗口尚未批准，不再误报“没有 cohort” | cortex-loop | `python3 bin/cortex-metrics.py --json` |
-| EX03 | 蜂群整体信任 | ≥0.70（L3） | 0.195（L1）= 均值 0.435 × 短板因子 0.45 | gap | 短板因子被主线程拖累，见 EX04 | cortex-loop | `python3 bin/cortex-loop trust --no-fetch` |
-| EX04 | 主线程信任 `orchestrator-laptop` | ≥0.70 | 0.195 —— **全群最低** | gap | 提分只有 `credit`（自主闭环）与过门率两条路；禁调阈值 | cortex-loop | `python3 bin/cortex-loop trust --no-fetch` |
-| EX05 | 闲置率 | <30% | 根因已修（E015 · 19:40），当日 `idle --json` 报 `idle_pct 0.0` 但 `ran=8` 样本太小 | **unknown** | 需一个完整无人值守窗口复验。**样本不足不算达标**（fail-closed） |
-| EX06 | 价值涌现层 V3 | >0 | V1 6 / V2 18 / **V3 0**（杠杆率 75%） | gap | 24 项产出零「产生新能力/新连接」。V3 判据本身是否可机械识别，待验 | cortex-loop | `python3 bin/cortex-loop value` |
-| EX07 | L4 自主（人不在仍推进） | A1–A6 全过 | 2026-07-31 `autonomy-acceptance.sh` PASS 10·FAIL 0·UNKNOWN 0 判决达标；证据 `artifacts/t51-autonomy-acceptance.md`（IMM-T51） | **unknown** | A1–A6 证据已落盘；前置 EX03 蜂群信任仍 gap（≈0.47≪0.70）→ fail-closed 不升 met | cortex-loop | `bash bin/cortex-loop-tests/autonomy-acceptance.sh` |
+| EX01 | G2 mechanical gate-pass rate | 24-hour rolling window, minimum sample 15, target ≥90% | approved; all-history cumulative is a track record only, not a target | **met** | rolling cohort readable from origin; `python3 bin/cortex-metrics.py --json` |
+| EX02 | G1 self-heal closed-loop rate | frozen eligible discovery and passed result share a lineage | origin discovery/result/learning all three sources read through; a live clock-auto lineage has formed; the current count is read live from the measuring tool | **met** | `BASELINE` means only that the rolling window is not yet approved; it no longer misreports "no cohort" | cortex-loop | `python3 bin/cortex-metrics.py --json` |
+| EX03 | swarm-wide trust | ≥0.70 (L3) | 0.195 (L1) = mean 0.435 × bottleneck factor 0.45 | gap | the bottleneck factor is dragged down by the main thread; see EX04 | cortex-loop | `python3 bin/cortex-loop trust --no-fetch` |
+| EX04 | main-thread trust `orchestrator-laptop` | ≥0.70 | 0.195 — **lowest in the swarm** | gap | the only two ways to raise the score are `credit` (an autonomous closed loop) and gate-pass rate; tuning the threshold is forbidden | cortex-loop | `python3 bin/cortex-loop trust --no-fetch` |
+| EX05 | idle rate | <30% | root cause fixed (E015 · 19:40); that day's `idle --json` reported `idle_pct 0.0` but `ran=8` is too small a sample | **unknown** | needs a full unattended window to re-check. **An insufficient sample is not a pass** (fail-closed) |
+| EX06 | value-emergence layer V3 | >0 | V1 6 / V2 18 / **V3 0** (leverage 75%) | gap | 24 outputs produced zero "new capability / new connection". Whether the V3 criterion itself can be recognized mechanically is still to be checked | cortex-loop | `python3 bin/cortex-loop value` |
+| EX07 | L4 autonomy (still advances when the person is absent) | A1–A6 all pass | 2026-07-31 `autonomy-acceptance.sh` PASS 10 · FAIL 0 · UNKNOWN 0, verdict meets the bar; evidence `artifacts/t51-autonomy-acceptance.md` (IMM-T51) | **unknown** | A1–A6 evidence is on disk; prerequisite EX03 swarm trust is still gap (≈0.47 ≪ 0.70) → fail-closed, do not promote to met | cortex-loop | `bash bin/cortex-loop-tests/autonomy-acceptance.sh` |
 
-## B · 保安四问的字段缺口（2026-07-29 本次实测发现）
+## B · Field gaps in the four guard questions (found in the 2026-07-29 live check)
 
-> Skill 层四问已答完（SKILL.md 前 94 行）。**任务层与节点层各缺两问。**
-> 查法：`bash bin/cortex-trace.sh task <id>` · `python3 bin/cortex-loop why --node <n>` · `brain-network/directions/_swarm/<node>.md`
+> The Skill-layer four questions are answered (the first 94 lines of SKILL.md). **The task layer and the node layer are each missing two questions.**
+> How to look: `bash bin/cortex-trace.sh task <id>` · `python3 bin/cortex-loop why --node <n>` · `brain-network/directions/_swarm/<node>.md`
 
-| id | 层 | 缺哪一问 | 实测现状 | 状态 | owner | short_test |
+| id | layer | missing question | observed | state | owner | short_test |
 |----|----|---------|---------|------|-------|------------|
-| EX08 | 任务 | **从哪来** | S1 任务已用 immutable discovery receipt 绑定 `source/candidate`，result 再绑定 `candidate_source/discovery_id`，origin 真机 lineage 已成立 | met | cortex-loop | `python3 bin/cortex-metrics.py --json` |
-| EX09 | 节点 | **从哪来** | `loop_node` 画像字段 = node / kind / can_sleep / executors / telegram_reach / last_seen / owns。**无入群时间、无累计样本数** —— 样本数只在 `trust` 运行时现算，不落盘，所以「这台机干过多少活」看画像看不出来 | **met** |
-| EX10 | 节点 | **到哪去** | 画像无信任目标字段（这台机该爬到 L 几、还差什么）。G5 只有群体级目标，没有节点级 | **met** |
+| EX08 | task | **where it came from** | S1 tasks are bound to `source/candidate` by an immutable discovery receipt; the result then binds `candidate_source/discovery_id`; a live origin lineage holds | met | cortex-loop | `python3 bin/cortex-metrics.py --json` |
+| EX09 | node | **where it came from** | `loop_node` profile fields = node / kind / can_sleep / executors / telegram_reach / last_seen / owns. **No join time, no cumulative sample count** — the sample count is computed only at `trust` runtime and is not persisted, so "how much work this machine has done" cannot be read from the profile | **met** |
+| EX10 | node | **where it is going** | the profile has no trust-target field (which L this machine should climb to, and what is still missing). G5 has only a swarm-level target, not a node-level one | **met** |
 
-> **不在本次修**：补字段要动 `bin/cortex-loop`（另有 sub-agent 在改，会冲突）与合同 registry。
-> 记在这里正是「知道该有但还没有」的一等公民。
+> **Not in this fix**: adding fields would touch `bin/cortex-loop` (another sub-agent is editing it, and that would conflict) and the contract registry.
+> Recording it here is exactly the first-class citizen of "we know it should exist and it does not yet".
 
-## C · 已知技术债（每条指回原始诚实清单）
+## C · Known technical debt (each row points back to the original honest list)
 
-| id | 事项 | 状态 | 来源 | owner | short_test |
+| id | item | state | source | owner | short_test |
 |----|------|------|------|-------|------------|
-| EX11 | `read_ref` / `list_refs` 三态化 —— 把「读到空」当「没有」。**DIMENSIONAL 母题第 5 处、也是最底层**（被调 20 次，claim/plan/result/lease 全经过它） | **met** | `reports/2026-07-29/_standalone/cortex-loop-engine-fixes.md` §六 #6 |
-| EX12 | G2 已拆为**累计战绩 + 24 小时滚动 cohort**，最小样本 15、目标 ≥90%，批准证据已落盘 | **met** | `METRICS.json` + `reports/2026-07-31/cortex-loop/metrics-ratification.md`；Dashboard 同时显示累计与滚动 |
-| EX13 | `gate=scope-gap` 第三态**真机零实证**，只有 H06 桩测覆盖 | **unknown** | throughput-fix #4。需等真机自然产生一条才算闭环 |
-| EX14 | 双节点下「一次失败让给别的节点」= 一件活最多被试 2 次，之后在所有计划里永久沉底 | **met** | throughput-fix #7。可能需要「冷却后重试」而非永久让位 |
-| EX15 | 长任务跑满 >900s 时心跳无中间写入 → 外部看像掉线（实测 25min 单任务导致 pulse 判 `P ❌ 心跳=38分钟`）。**「在干重活」和「卡死了」又一处二态该展开三态** | **met** | throughput-fix §新发现的副作用 #8 |
-| EX16 | worker git-sync 死锁（落后 302 / 领先 6 未推 / 70 脏 / 84 stash）→ **worker 判 done 的产出推不到 origin，传播门（T8）对它形同虚设** | gap | engine-fixes §六 #1。另一条工作线「先停再修」 |
-| EX17 | `suite.sh` F15 幂等检查不抗并发：15 分钟真时钟会在跑测试时改 `TASKS.md` 造成假红（实测遇 1 次） | **met** | engine-fixes §六 #4 |
-| EX18 | `bin/auto-mount.sh` 的 `OB1_ROOT` 硬编码 laptop 路径，worker 跑不了 | **met** | throughput-fix #6（不在该 lane 内，只记不代做） |
-| EX19 | 预算编排未实施。已知不对称：laptop 订阅制**无 usage API**，只能用抑制状态 + 窗口计时代理 | gap | CHARTER-SWARM §Unknown · 设计见 `cortex-loop-handoff.md` §四 | cortex-loop | `test -s reports/2026-07-29/_standalone/cortex-loop-handoff.md && grep -qE '预算编排|usage API|窗口计时' reports/2026-07-29/_standalone/cortex-loop-handoff.md` |
-| EX20 | `claim → run → write result` 的 run-v1 receipt、origin 可达性、learning 精确绑定与写失败不前进 | **met** | clock-auto 真机 canary 已形成完整 discovery/result/learning lineage；Dashboard 仍只称 canary，不冒充 production | cortex-loop | `python3 bin/cortex-metrics.py --json` |
+| EX11 | three-state `read_ref` / `list_refs` — treating "read empty" as "absent". **DIMENSIONAL root pattern, site 5, and the lowest layer** (called 20 times; claim/plan/result/lease all pass through it) | **met** | `reports/2026-07-29/_standalone/cortex-loop-engine-fixes.md` §6 #6 |
+| EX12 | G2 is split into **cumulative track record + a 24-hour rolling cohort**, minimum sample 15, target ≥90%, approval evidence on disk | **met** | `METRICS.json` + `reports/2026-07-31/cortex-loop/metrics-ratification.md`; Dashboard shows cumulative and rolling together |
+| EX13 | the third state `gate=scope-gap` has **zero live evidence**; only the H06 stub test covers it | **unknown** | throughput-fix #4. The loop closes only when a live machine naturally produces one |
+| EX14 | under two nodes, "one failure yields to the other node" means one piece of work is tried at most 2 times, then sinks permanently in every plan | **met** | throughput-fix #7. It may need "retry after cooldown" rather than a permanent yield |
+| EX15 | when a long task runs past >900s the heartbeat writes nothing in between → from the outside it looks offline (a measured 25min single task made pulse judge `P ❌ heartbeat=38 minutes`). **"Doing heavy work" and "stuck" are another two-state that should open into three** | **met** | throughput-fix, newly found side effect #8 |
+| EX16 | worker git-sync deadlock (302 behind / 6 ahead unpushed / 70 dirty / 84 stash) → **output the worker judged done cannot reach origin, so the propagation gate (T8) is a dead letter for it** | gap | engine-fixes §6 #1. Another work line is "stop first, then fix" |
+| EX17 | `suite.sh` F15 idempotence check is not concurrency-safe: a 15-minute real clock rewrites `TASKS.md` during the test and causes a false red (seen once live) | **met** | engine-fixes §6 #4 |
+| EX18 | `bin/auto-mount.sh` hardcodes `OB1_ROOT` to a laptop path, so the worker cannot run it | **met** | throughput-fix #6 (not in that lane; recorded only, not done on its behalf) |
+| EX19 | budget orchestration is not implemented. Known asymmetry: the laptop subscription **has no usage API**; the only proxies are the suppression state and window timing | gap | CHARTER-SWARM §Unknown · design in `cortex-loop-handoff.md` §4 | cortex-loop | `test -s reports/2026-07-29/_standalone/cortex-loop-handoff.md && grep -qE 'budget orchestration|usage API|window timing' reports/2026-07-29/_standalone/cortex-loop-handoff.md` |
+| EX20 | run-v1 receipt for `claim → run → write result`, origin reachability, exact learning binding, and a failed write does not advance | **met** | the clock-auto live canary has formed a complete discovery/result/learning lineage; Dashboard still calls it a canary and does not pass it off as production | cortex-loop | `python3 bin/cortex-metrics.py --json` |
 
 ---
 
-## D · 候选律（走 [[latch-doctrine|LATCH]] 判据，够不上就不硬立）
+## D · Candidate laws (apply the [[latch-doctrine|LATCH]] bar; do not hard-code one that does not clear it)
 
-> LATCH 门槛两条同时满足才建：**① 同一模式 ≥3 次 ② 已有文字提醒但无效**。
-> 只满足 ① = 写进 guide/错题本，不占 Layer 0 的位置。
+> A LATCH is built only when both bars are met at once: **(1) the same pattern ≥3 times (2) a written reminder already exists and did nothing**.
+> Meeting only (1) means write it into the guide / error log. It does not take a Layer 0 slot.
 
-| 候选 | ① ≥3 次？ | ② 提醒无效？ | 判定 |
+| Candidate | (1) ≥3 times? | (2) reminder did nothing? | Verdict |
 |------|----------|-------------|------|
-| **每道新门首日必被自己的实测打脸** | ✅ 传播门 v1→v2（9:00 立 → 10:52 证伪）· PULSE（8:56 立 → 9:09 修首日两坑）· `991016f78` 负向测试逮到自己的修复是死的 | ❌ **从没被写成提醒过**，今天才第一次成文 | **不立律**。且它已有机械后盾（suite 每个负向测试必经破坏性验证）—— 机制在，缺的只是文字。已写入 [[cortex-loop/references/tenets\|references/tenets.md]] §元模式，等第 4 次或「机制在仍被绕过」的证据再升格 |
-| **改判不删账** | ✅ `readjudicate`（用当前判据重判历史 rejected，非特赦）· `moot` 第四态独立命名空间不进功劳账 · `fault`/`credit` 双向计分不相互抵消 | ❌ 这三处**都是重复做对**，不是重复违规。LATCH 管的是违规模式 | **不立律**。它是 DIMENSIONAL 的推论（终态不能坍缩成「删掉」）+ 账本层设计原则。已写入 [[cortex-loop/references/architecture\|references/architecture.md]] §账本原则 |
-| **分母虚高会让永远归不了零的债看起来像欠债** | ✅ 孤岛 56→0（分母含不该含的）· `idle` 墙钟当分母 → 59% 虚高 · 过门率全历史累计分母（EX12） | ✅ **`idle` 的帮助文字已明写「别用墙钟当分母」，而过门率照样在用全历史分母** —— 这就是「写了提醒、另一处照犯」 | **✅ 已达 LATCH 门槛，但本轮不由我立**。C·onstruct 要求先建 Hook 再写文字，而 Hook 规格见下 —— 它要碰 `cortex-pulse.sh` 的口径，正撞 EX12 的利益冲突（被这个数字考核的人不该改这个数字的口径）。**交 operator 指派执行方。** |
+| **Every new gate is slapped by its own live check on day one** | ✅ propagation gate v1→v2 (set at 9:00 → falsified at 10:52) · PULSE (set at 8:56 → two day-one holes fixed at 9:09) · `991016f78` a negative test caught its own fix being dead | ❌ **it was never written down as a reminder**; today is the first time it is in prose | **do not make it a law**. And it already has mechanical backing (every negative test in the suite must pass a destructive check) — the mechanism is there; only the prose is missing. Written into [[cortex-loop/references/tenets\|references/tenets.md]] §meta-pattern. Promote it on the 4th occurrence, or on evidence that the mechanism is still being bypassed |
+| **Rejudge, do not erase the ledger** | ✅ `readjudicate` (rejudge historical rejected with the current criterion; not a pardon) · `moot` fourth state in its own namespace, not entered in the credit ledger · `fault` / `credit` score both ways and do not cancel each other | ❌ all three are **repeatedly doing it right**, not a repeated violation. LATCH governs violation patterns | **do not make it a law**. It is a corollary of DIMENSIONAL (a terminal state must not collapse into "delete it") plus a ledger-layer design principle. Written into [[cortex-loop/references/architecture\|references/architecture.md]] §ledger principles |
+| **An inflated denominator makes a debt that can never return to zero look like a debt** | ✅ islands 56→0 (the denominator included what it should not) · `idle` used wall clock as the denominator → 59% inflated · gate-pass rate used an all-history cumulative denominator (EX12) | ✅ **`idle`'s help text already says "do not use wall clock as the denominator", and the gate-pass rate still uses the all-history denominator** — that is "the reminder was written, and another place did it anyway" | **✅ the LATCH bar is met, but this round is not mine to enact**. C·onstruct requires the Hook to be built before the prose, and the Hook spec is below — it would touch how `cortex-pulse.sh` defines the ratio, which collides directly with EX12's conflict of interest (the person scored by this number must not change how this number is defined). **Hand it to the operator to assign an executor.** |
 
-**候选 3 的 Hook 规格（已想清楚，可直接交付给执行方 · 不改任何数字）**：
-一个**只读**扫描器，断言「任何被发布的比率，其分母口径必须显式声明」——
-grep 出所有产出百分比的位置（`cortex-pulse.sh` / `cortex-dashboard.sh` / `cortex-loop idle|value|trust`），
-逐个检查是否在同一文件里有对应的 `# denominator:` 声明行；缺声明即报红。
-**它只查有没有说清楚，不判断口径对不对** —— 所以不构成利益冲突。
+**Hook spec for candidate 3 (already thought through; can be handed to the executor as-is · it changes no number)**:
+a **read-only** scanner that asserts "any published ratio must declare its denominator definition explicitly" —
+grep every place that emits a percentage (`cortex-pulse.sh` / `cortex-dashboard.sh` / `cortex-loop idle|value|trust`),
+and check each one for a matching `# denominator:` declaration line in the same file; a missing declaration is red.
+**It only checks whether the definition was stated. It does not judge whether the definition is right** — so it is not a conflict of interest.
 
 ---
 
@@ -95,9 +96,9 @@ grep 出所有产出百分比的位置（`cortex-pulse.sh` / `cortex-dashboard.s
 
 [[cortex-loop/INTENT|INTENT.md]] · [[cortex-loop/SKILL|SKILL.md]] · [[cortex-loop/ERRORS|ERRORS.md]] · [[cortex-loop/JOURNAL|JOURNAL.md]] · [[brain-network/directions/loop-ops/CHARTER-SWARM\|CHARTER-SWARM]] · [[cortex-loop/references/tenets|references/tenets]]
 
-*建立 2026-07-29 · 每条都指回 commit / 报告 / 命令回显，无一条凭印象*
+*Established 2026-07-29 · every row points back to a commit, a report, or a command echo; none of it is from memory*
 
 ---
 
 <!-- cortex:map-backlink d-8ba45546f8116b1686496d6d -->
-关联地图：[[skills/cortex-loop/MAP|Cortex Loop 全景地图]]
+Related map: [[skills/cortex-loop/MAP|Cortex Loop panorama]]

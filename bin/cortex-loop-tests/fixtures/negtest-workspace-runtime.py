@@ -245,7 +245,7 @@ with tempfile.TemporaryDirectory(prefix="cortex-runtime-") as raw:
             loop.commit_workspace_candidate(ctx_h, rejected)
             raise AssertionError("rejecting hook did not block candidate commit")
         except RuntimeError as exc:
-            assert "受控提交失败" in str(exc), exc
+            assert "controlled commit failed" in str(exc), exc
         assert wh.is_dir() and git(wh, "status", "--porcelain")
         assert (wh / "out/h.md").read_text() == "REJECT_HOOK\n"
         assert git(wh, "rev-parse", "HEAD") == master_tip_after_ab

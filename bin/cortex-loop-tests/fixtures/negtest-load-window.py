@@ -1,30 +1,30 @@
 #!/usr/bin/env python3
-"""负向测试：负载率/闲置率的分子与分母必须取同一个时间窗。
+"""Negative test: load rate and idle rate must take numerator and denominator from the same time window.
 
-为什么必须常驻回归（2026-07-29 实测）：
-  `cortex-dashboard.sh` 的分母是「今天 00:00 至今应跑多少拍」，
-  分子却是 `refs/swarm/<shard>/result/` 的**全历史**去重计数。
+Why this must stay in the suite (measured 2026-07-29):
+  The denominator in `cortex-dashboard.sh` is "how many ticks should have run from today 00:00 until now",
+  but the numerator was the all-history distinct count of `refs/swarm/<shard>/result/`.
 
-      TICKS_DUE  = (now - 今天00:00) / 900        ← 今天
-      TICKS_PROD = 全部 result ref 去重 = 31       ← 开天辟地至今
+      TICKS_DUE  = (now - today 00:00) / 900        <- today
+      TICKS_PROD = all result refs, distinct = 31   <- since the beginning
 
-  蜂群 2026-07-28 才起，当天两者恰好都≈今天，**缺陷被完全掩盖**（显示 66% 闲置，看着挺合理）。
-  真正会说谎的是跨天那一刻：
+  The swarm started on 2026-07-28, so that day the two happened to be about "today" and the defect
+  was completely hidden (66% idle, which looked reasonable). The lie shows up at the day boundary:
 
-      次日 00:15 → TICKS_DUE = 1，TICKS_PROD 仍带着昨天的 31
-                 → LOAD = min(100, 3100) = 100%  →  闲置 0%
+      next day 00:15 -> TICKS_DUE = 1, TICKS_PROD still carries yesterday's 31
+                      -> LOAD = min(100, 3100) = 100%  ->  idle 0%
 
-  新的一天一个任务都还没跑，仪表盘显示**满载**。
-  这是 fail-open 里最坏的一种：**最该报警的时刻恰好最绿**。
-  而且它自我掩盖 —— 越是长期没产出，分子里的历史存量越厚，数字越好看。
+  A new day has not run a single task, and the dashboard shows fully loaded.
+  This is the worst kind of fail-open: the moment that most needs an alarm is the greenest.
+  It also hides itself -- the longer there is no output, the thicker the historical numerator, the better the number looks.
 
-与「一拍时间预算」是同一个母题的两个面：
-  那个是量具坏了（300s 把活掐死），这个是量纲错了（分子分母不同窗）。
-  两者都不会让系统崩，只会让**看仪表盘的人以为一切正常**。
+This is the same theme as the one-tick time budget, on the other face:
+  that one is a broken ruler (300s kills the work); this one is a wrong dimension (numerator and denominator use different windows).
+  Neither crashes the system. Both make a person reading the dashboard think everything is fine.
 
-修法不是调数字（那是粉饰），是让分子跟着分母走同一个窗口。
-判据方向也要对：修完数字应该变**难看**或不变，绝不该变好看 ——
-若某次改动让这个指标凭空变好，第一嫌疑就是又把窗口放宽了。
+The fix is not to tune the number (that is cosmetics). Make the numerator follow the denominator's window.
+The direction of the criterion matters too: after the fix the number should look worse or stay the same, never better --
+if a change makes this metric look better out of nowhere, the first suspect is that the window was widened again.
 """
 import os
 import re
@@ -45,80 +45,80 @@ def check(name, ok, detail=""):
         print("  FAIL %s  %s" % (name, detail))
 
 
-# ── 1 · 算术层：证明「不同窗」在跨天时刻必然 fail-open ──────────────────
+# -- 1. Arithmetic: different windows must fail-open at the day boundary --
 def load_pct(prod, due):
     due = max(due, 1)
     return min(100, prod * 100 // due)
 
 
-# 场景取真值：2026-07-29 当天分子 31、分母 90
+# Scenario uses the live numbers: numerator 31 and denominator 90 on 2026-07-29
 check(
-    "同日两者≈同窗时缺陷不可见（这正是它藏了一整天的原因）",
+    "on the same day, when the two windows nearly match, the defect is invisible (that is why it hid all day)",
     load_pct(31, 90) == 34,
-    "实测当天应为 34% 负载 / 66% 闲置",
+    "the measured day should be 34% load / 66% idle",
 )
 
-# 跨天：分母重置、分子不重置 → 满载
+# Day boundary: denominator resets, numerator does not -> fully loaded
 check(
-    "跨天 00:15 用全历史分子 → 必然虚假满载（这是要挡的行为）",
+    "00:15 next day with an all-history numerator -> false full load (the behavior to block)",
     load_pct(31, 1) == 100,
-    "旧口径在次日开局显示 100% 负载 = fail-open",
+    "the old definition shows 100% load at the start of the next day = fail-open",
 )
 
-# 跨天：分子同窗（新的一天还没产出 → 0） → 正确显示零负载
+# Day boundary: same-window numerator (the new day has produced nothing -> 0) -> correctly zero load
 check(
-    "跨天 00:15 用同窗分子 → 正确显示 0% 负载 / 100% 闲置",
+    "00:15 next day with a same-window numerator -> correctly 0% load / 100% idle",
     load_pct(0, 1) == 0,
-    "同窗后新的一天没产出就该显示闲置，而不是满载",
+    "after the windows match, a new day with no output must show idle, not full load",
 )
 
 
-# ── 2 · 实现层：真文件里分子必须带窗口过滤 ────────────────────────────
+# -- 2. Implementation: the numerator in the real file must filter by the window --
 try:
     src = open(DASH, encoding="utf-8").read()
 except OSError as e:
-    print("  FAIL 读不到 cortex-dashboard.sh：%s" % e)
+    print("  FAIL cannot read cortex-dashboard.sh: %s" % e)
     sys.exit(1)
 
 m = re.search(r"TICKS_PROD=\"\$\((.*?)\)\"", src, re.S)
-check("cortex-dashboard.sh 里找得到 TICKS_PROD 计算", m is not None,
-      "取不到就无从判断口径 —— 按三态这是 UNKNOWN，不倒向 PASS")
+check("cortex-dashboard.sh contains the TICKS_PROD calculation", m is not None,
+      "if it cannot be read the definition is UNKNOWN; do not fall open to PASS")
 
 if m:
     body = m.group(1)
-    # 分子必须引用分母用的同一个起点变量，且真的拿它做了过滤
+    # The numerator must cite the same start variable the denominator uses, and actually filter with it
     check(
-        "分子引用了分母的窗口起点 _day_start",
+        "numerator cites the denominator window start _day_start",
         "_day_start" in body,
-        "分子没引用 _day_start = 两端不同窗，跨天必假绿",
+        "numerator does not cite _day_start = the two ends use different windows, and the day boundary goes falsely green",
     )
     check(
-        "分子按 ref 提交时间过滤（不是靠 id 里编的日期字符串猜）",
+        "numerator filters by ref commit time (not by a date string baked into the id)",
         "committerdate" in body,
-        "靠 plan id 里的 MMDD 猜日期会被非常规 id（orchestrator / real1 等夹具）绕过",
+        "guessing the date from MMDD inside a plan id is bypassed by irregular ids (orchestrator / real1 fixtures)",
     )
     check(
-        "零 ref 时计数只产生一个 0（不会形成 0\\n0 算术崩溃）",
+        "zero refs produce a single 0 (not a 0\\n0 arithmetic crash)",
         "count_nonempty" in body and "grep -c" not in body,
-        "`grep -c . || echo 0` 在零匹配时会打印两个 0",
+        "`grep -c . || echo 0` prints two zeros when nothing matches",
     )
 
 check(
-    "dashboard 已清除所有 `grep -c ... || echo 0` 双零模式",
+    "dashboard has cleared every `grep -c ... || echo 0` double-zero pattern",
     not any(
         re.search(r"grep\s+-c\S*.*\|\|\s*echo\s+0", line)
         for line in src.splitlines()
         if not line.lstrip().startswith("#")
     ),
-    "任何一个残留点都可能在午夜/空文件时变成多行整数",
+    "any leftover can become a multi-line integer at midnight or on an empty file",
 )
 
-# 分母口径本身也要显式，防止有人反向把分母改成全历史来"对齐"
+# The denominator definition must stay explicit, so nobody "aligns" it by widening it to all history
 m2 = re.search(r"TICKS_DUE=\$\(\(.*?\)\)", src, re.S)
 check(
-    "分母仍是「今日应跑拍数」，没有被反向改成全历史",
+    "denominator is still today's expected tick count, not widened to all history",
     m2 is not None and "_day_start" in m2.group(0) and "900" in m2.group(0),
-    "对齐量纲的正解是收紧分子，不是放宽分母",
+    "the right way to align the dimension is to tighten the numerator, not to loosen the denominator",
 )
 
 print("negtest-load-window: %s" % ("ALL PASS" if fails == 0 else "%d FAIL" % fails))

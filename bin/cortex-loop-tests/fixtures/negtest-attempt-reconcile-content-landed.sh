@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Contract tests for cortex-attempt-reconcile.sh 落地判据扩展（2026-10-11）。
-# 背景：ancestry 判据漏掉"内容已落地但 SHA 不同"的 attempt（isolate 重放 /
-# landed twin 附带额外内容）→ 永久跳过。新增内容级证明：manifest.allowed_paths
-# 的 blob 与 master 逐一相等 ⇒ 不可能含唯一内容。
+# Contract tests for the cortex-attempt-reconcile.sh landing-criterion extension (2026-10-11).
+# Background: the ancestry criterion missed attempts whose content had landed under a different SHA
+# (isolate replay / a landed twin that carries extra content) -> they were skipped forever.
+# New content-level proof: every blob in manifest.allowed_paths equals master -> no unique content.
 #
-# 红绿门（反向验证）：把 cortex-attempt-reconcile.sh 换回 HEAD 版本，
-# 本夹具必须变红（CONTENT_LANDED 用例判 unlanded）。
+# Red/green gate (reverse check): put cortex-attempt-reconcile.sh back to the HEAD version
+# and this fixture must go red (the CONTENT_LANDED case is judged unlanded).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
@@ -14,21 +14,21 @@ TMP="$(mktemp -d /tmp/cortex-reconcile-content-test.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
 
 repo="$TMP/repo"
-wts="$TMP/worktrees/cortex"     # 必须以 /cortex 结尾：sweeper 只碰 */cortex/iso* worktree
+wts="$TMP/worktrees/cortex"     # must end in /cortex: the sweeper only touches */cortex/iso* worktrees
 git init --quiet -b master "$repo"
 git -C "$repo" config user.name fixture
 git -C "$repo" config user.email fixture@example.invalid
 git -C "$repo" config core.fsmonitor false
 printf 'alpha\n' > "$repo/a.txt"
-# 模拟真实仓布局：sweeper 的 A/B 清理路径都通过 `$REPO/bin/cortex-workspace.sh` 调用；
-# 夹具仓若缺这个文件，两条路径都会失败 → 用例变成"假通过"（2026-10-11 自查发现）。
+# Mirror a real repo layout: both sweeper cleanup paths A and B call `$REPO/bin/cortex-workspace.sh`.
+# If the fixture repo lacks that file, both paths fail and the case becomes a false pass (found 2026-10-11).
 mkdir -p "$repo/bin"
 cp "$ROOT/bin/cortex-workspace.sh" "$repo/bin/cortex-workspace.sh"
 git -C "$repo" add a.txt bin/cortex-workspace.sh
 git -C "$repo" commit --quiet -m seed
 base="$(git -C "$repo" rev-parse HEAD)"
 
-# master 前进：a.txt 变 v2（这是"落地 twin"，与分支提交 SHA 不同）
+# master moves forward: a.txt becomes v2 (the landed twin; its commit SHA differs from the branch)
 printf 'v2\n' > "$repo/a.txt"
 git -C "$repo" commit --quiet -am landed-v2
 printf 'beta\n' > "$repo/b.txt"
@@ -37,17 +37,17 @@ git -C "$repo" commit --quiet -m add-b
 
 mkdir -p "$wts"
 
-# 分支 1：内容已落地 —— 从 base 起，内容与 master 的 a.txt 相同，但历史不同
+# Branch 1: content has landed -- from base, a.txt matches master, but the history differs
 git -C "$repo" branch cortex/attempt/isoCL "$base"
 git -C "$repo" worktree add --quiet "$wts/isoCL" cortex/attempt/isoCL
 ( cd "$wts/isoCL" && printf 'v2\n' > a.txt && git commit --quiet -am same-content-diff-sha )
 
-# 分支 2：对照 —— a.txt=v3 在 master 上不存在（真唯一内容）
+# Branch 2: control -- a.txt=v3 does not exist on master (truly unique content)
 git -C "$repo" branch cortex/attempt/isoUL "$base"
 git -C "$repo" worktree add --quiet "$wts/isoUL" cortex/attempt/isoUL
 ( cd "$wts/isoUL" && printf 'v3\n' > a.txt && git commit --quiet -am unique-v3 )
 
-# manifest（真实形态：<worktree root>/.state/<attempt>.json）
+# manifest (real shape: <worktree root>/.state/<attempt>.json)
 mkdir -p "$wts/.state"
 jq -n '{state:"active",attempt:"isoCL",allowed_paths:["a.txt"]}' > "$wts/.state/isoCL.json"
 jq -n '{state:"active",attempt:"isoUL",allowed_paths:["a.txt"]}' > "$wts/.state/isoUL.json"
@@ -61,7 +61,7 @@ assert_eq() {
   if [ "$want" = "$got" ]; then echo "PASS $label ($got)"; pass=$((pass+1))
   else echo "FAIL $label (want=$want got=$got)" >&2; fail=$((fail+1)); fi
 }
-assert_ok() {  # 断言命令成功（存在性等正向断言）
+assert_ok() {  # assert the command succeeds (positive checks such as existence)
   local label="$1"; shift
   if "$@"; then echo "PASS $label"; pass=$((pass+1))
   else echo "FAIL $label" >&2; fail=$((fail+1)); fi
@@ -70,7 +70,7 @@ assert_ok() {  # 断言命令成功（存在性等正向断言）
 run_json() { ( cd "$repo" && bash "$SWEEPER" --json 2>/dev/null ); }
 jget() { printf '%s' "$1" | jq -r ".$2"; }
 
-# 前置：确认两条分支都是 master 的"非祖先"（否则夹具没测到目标场景）
+# Precondition: both branches are non-ancestors of master (otherwise the fixture misses the target case)
 assert_eq "isoCL is non-ancestor" "no" \
   "$(git -C "$repo" merge-base --is-ancestor cortex/attempt/isoCL master && echo yes || echo no)"
 assert_eq "isoCL blob equals master" "$(git -C "$repo" rev-parse master:a.txt)" \
@@ -84,20 +84,21 @@ assert_eq "unique-content worktree is kept (unlanded)" "1" "$(jget "$j" unlanded
 assert_eq "manifest resolved at real state path (A-path reachable)" "1" "$(jget "$j" active_manifest_targets)"
 assert_eq "no branch-only deletable (isoCL has worktree, isoUL unlanded)" "0" "$(jget "$j" branch_only_deletable)"
 
-# 负例：拿掉 manifest（无 allowed_paths 可证）→ 内容级证明必须失效，不得凭猜测放行
+# Negative: remove the manifest (no allowed_paths to prove) -> content-level proof must fail; do not guess a pass
 rm -f "$wts/.state/isoCL.json"
 j2="$(run_json)"
 assert_eq "without manifest, content proof is withdrawn" "0" "$(jget "$j2" worktree_cleanup_targets)"
 assert_eq "without manifest, both worktrees kept" "2" "$(jget "$j2" unlanded_skip)"
 
-# 负例：manifest 存在但 allowed_paths 指向 master 上不存在的路径 → 保守判未落地
+# Negative: manifest exists but allowed_paths points at a path missing on master -> conservatively unlanded
 jq -n '{state:"active",attempt:"isoCL",allowed_paths:["nope.txt"]}' > "$wts/.state/isoCL.json"
 j3="$(run_json)"
 assert_eq "unresolvable allowed_path is conservative" "0" "$(jget "$j3" worktree_cleanup_targets)"
 
-# --- (d) 加固反例（反例驱动）：allowed_paths 与 master 逐一相等，但 allowed_paths
-#     之外另有唯一内容。第 1 步（blob 相等）会通过 → 必须由第 2 步（改动集合
-#     ⊆ allowed_paths）判未落地。缺第 2 步时本用例变红 = 唯一内容会被误拆。
+# --- (d) Hardening counterexample (counterexample-driven): allowed_paths blobs each equal master,
+#     but unique content exists outside allowed_paths. Step 1 (blob equality) passes -> step 2
+#     (the change set is a subset of allowed_paths) must judge it unlanded. Without step 2 this
+#     case goes red = unique content would be torn down by mistake.
 repo2="$TMP/repo2"
 wts2="$TMP/worktrees2/cortex"
 git init --quiet -b master "$repo2"
@@ -128,9 +129,9 @@ j4="$( cd "$repo2" && CORTEX_WORKSPACE_ROOT="$wts2" bash "$SWEEPER" --json 2>/de
 assert_eq "out-of-scope unique content blocks cleanup" "0" "$(jget "$j4" worktree_cleanup_targets)"
 assert_eq "out-of-scope attempt kept as unlanded" "1" "$(jget "$j4" unlanded_skip)"
 
-# --- (e) P1（2026-10-11 独立审计）：A 路径被域身份闸拒绝后，B 路径不得无门拆除 ---
-# 带 .cortex-domain-lease 的 iso worktree：A 的 `abandon --purge` 会被域闸拒绝，
-# 旧版随即回退进**没有域闸**的 B 路径把 worktree+branch 删掉（审计实测 `✅ B isoLease`）。
+# --- (e) P1 (independent audit, 2026-10-11): after path A is refused by the domain-identity gate, path B must not tear down without a gate ---
+# An iso worktree with .cortex-domain-lease: A's `abandon --purge` is refused by the domain gate.
+# The old code then fell back into path B, which has no domain gate, and deleted the worktree and branch (audit observed `B isoLease`).
 git -C "$repo" branch cortex/attempt/isoLease "$base"
 git -C "$repo" worktree add --quiet "$wts/isoLease" cortex/attempt/isoLease
 ( cd "$wts/isoLease" && printf 'v2\n' > a.txt && git commit --quiet -am lease-landed )

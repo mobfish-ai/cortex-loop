@@ -108,7 +108,7 @@ with tempfile.TemporaryDirectory(prefix="cortex-task-inspection-") as tmp:
                   "--settlement", "--json"], cwd=repo).stdout)["settlement"]
     assert mismatch["propagation"]["state"] == "SETTLING"
     assert mismatch["artifact_paths"][0]["canonical"]["state"] == "NO"
-    assert "canonical 内容不同" in mismatch["artifact_paths"][0]["canonical"]["detail"]
+    assert "canonical content differs" in mismatch["artifact_paths"][0]["canonical"]["detail"]
 
     # Dirty local artifact is a hard BLOCKED even when canonical has an exact blob.
     publish_canonical(repo, remote, squash_oid)
@@ -123,7 +123,7 @@ with tempfile.TemporaryDirectory(prefix="cortex-task-inspection-") as tmp:
 
     missing = run(engine + ["task-show", "--line", "testline", "--task", "NOPE", "--json"],
                   cwd=repo, check=False)
-    assert missing.returncode == 1 and "找不到任务" in missing.stderr
+    assert missing.returncode == 1 and "task not found" in missing.stderr
 
     # Every operation above was task-show/read setup: query itself did not mutate truth.
     assert tasks.read_bytes() == task_before
@@ -141,7 +141,7 @@ with tempfile.TemporaryDirectory(prefix="cortex-task-inspection-") as tmp:
     run(["git", "fetch", "origin", "+refs/heads/master:refs/remotes/origin/master"], cwd=repo)
     first_complete = run(engine + ["try-complete", "--line", "testline", "--task", "T1"],
                          cwd=repo)
-    assert "canonical 内容不同" in first_complete.stdout
+    assert "canonical content differs" in first_complete.stdout
     task_after_mismatch = json.loads(run(
         engine + ["task-show", "--line", "testline", "--task", "T1", "--json"],
         cwd=repo).stdout)["task"]

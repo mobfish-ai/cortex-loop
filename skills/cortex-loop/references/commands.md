@@ -1,139 +1,141 @@
-# cortex-loop 子命令全表（按族详解）
+English | [简体中文](commands.zh-CN.md)
 
-> **何时该读**：要用某个子命令但忘了它干什么 / 有什么参数 / 什么时候该用；
-> 或想知道「这一族里还有什么工具我没用过」。
-> **上级**：[[cortex-loop/SKILL|SKILL.md]] §子命令六族（那里只有族级总表）
-> **真相源**：`bin/cortex-loop`（引擎）
+# cortex-loop subcommand catalog (by family)
 
-退出码统一：`0`=正常 / `1`=红灯或失败 / `2`=用法错。
-**只有「AI 挂载点」那族会烧额度**，其余全是零 LLM 的纯代码。
+> **When to read this**: you need a subcommand and have forgotten what it does, what arguments it takes, or when to use it;
+> or you want to know "what else is in this family that I have not used".
+> **Parent**: [[cortex-loop/SKILL|SKILL.md]] §subcommand families (that page has only the family-level table)
+> **Source of truth**: `bin/cortex-loop` (engine)
+
+Exit codes are uniform: `0` = ok / `1` = red or failed / `2` = usage error.
+**Only the "AI mount points" family burns quota.** Everything else is zero-LLM plain code.
 
 ---
 
-## 心跳与账本（零 LLM）
+## Heartbeat and ledger (zero LLM)
 
-| 子命令 | 干什么 | 什么时候用 |
+| Subcommand | What it does | When to use it |
 |--------|--------|-----------|
-| `tick [--auto]` | 扫所有 enabled 线，算出到窗口的任务；`--auto` 才真推进一轮 | launchd 每 900s 自动敲。人手跑不加 `--auto` = 只看有什么到期 |
-| `next --line X [--task T] [--claim]` | 渲染下一步**自足提示词**到 stdout；`--claim` 同时占坑为 `running` | 想手工执行一轮，或看看环会怎么派活 |
-| `submit --line X --task T [--result F] [--window-min N]` | 收执行结果 → 写 JOURNAL + 推窗口；**永远不写 done** | 手工跑完一轮后回填 |
-| `try-complete --line X --task T [--judge]` | **独立完成门**：artifact + `short_test` 过 → 再 land/origin；传播暂不可用时写 **`settling`**（执行已绿），不把已验绿工作打回「没干」；origin 可达才 **`done`** | 唯一能写 `done` 的命令。`settling` 由下一拍 tick 只做 land 结算。`--judge` 叠加 AI 否决 |
-| `status` | 人读概览：每条线 enabled / executor / 各状态计数 | 想一眼看全局 |
-| `idle [--date D] [--json]` | **拍口径四态普查**：有产出 / 记终态 / 真闲置 / **认不出**，分母只含真跑过的拍 | 问「闲置率多少」时。**别用墙钟当分母** —— 笔记本合盖那些拍机器根本没跑 |
-| `task-list --line X [--status S] [--json]` | 原子查询一条线的任务，不再 grep/awk 手搓表格 | Dashboard/Agent 要列队列或按状态过滤 |
-| `task-show --line X --task T [--json] [--settlement]` | 精确取一条任务；默认人读，`--json` 输出 `cortex-loop/task-show-v1`；`--settlement` 只读解释 artifact→commit→origin→canonical exact-blob 绑定，缺证据明确 `UNKNOWN`；integrator squash/replay 后以 `content-equivalent` 证明落地，不误绑提交祖先关系 | 排障、审计、派发前读合同，或查任务为什么停在 settling；禁止再手搓 `git log/ref` 拼判断 |
-| `task-add --line X ...` | 按账本真实表头生成任务行；缺正/负判据拒绝，合同门失败自动回滚 | 新增任务，禁止手拼 Markdown 列 |
-| `task-retry --line X --task T --reason R [--reset-fails]` | 原子把失败任务重排到当前窗口；done/blocked/human-gate 不暗中重开 | 根因修复后立即重试 |
-| `task-hold --line X --task T --status blocked\|waiting_external --reason R` | 原子挂起并停止自动重试 | 等外部授权或已确认技术阻塞 |
-| `task-resume --line X --task T --reason R` | 原子解除 blocked/waiting_external，保留失败史并恢复 pending | 阻塞条件已解决 |
-| `task-reopen --line X --task T --reason R` | 撤销一次假完成，清 evidence、增加 fails、原子退回 pending | 短测失真或完成声明被新证据推翻 |
-| `task-run --line X --task T` | 精确执行一条任务，仍走 claim→工具型 adapter→submit→完成门 | 端到端冒烟或只跑指定任务；会烧模型额度 |
+| `tick [--auto]` | scans every enabled line and computes the tasks that have reached their window; `--auto` is what actually advances one round | launchd knocks every 900s. A human run without `--auto` only shows what is due |
+| `next --line X [--task T] [--claim]` | renders the next **self-contained prompt** to stdout; `--claim` also takes the slot as `running` | you want to execute one round by hand, or see how the loop would dispatch |
+| `submit --line X --task T [--result F] [--window-min N]` | takes the execution result → writes JOURNAL + pushes the window; **never writes done** | backfill after a hand-run round |
+| `try-complete --line X --task T [--judge]` | **independent completion gate**: artifact + `short_test` pass → then land/origin; when propagation is temporarily unavailable it writes **`settling`** (execution is already green) and does not send already-green work back to "not done"; it is **`done`** only when origin is reachable | the only command that can write `done`. `settling` is landed-only by the next tick. `--judge` adds an AI veto |
+| `status` | human-readable overview: each line's enabled / executor / counts by state | you want the whole picture in one glance |
+| `idle [--date D] [--json]` | **four-state census in tick units**: produced / terminal recorded / truly idle / **cannot tell**. The denominator contains only ticks that actually ran | when someone asks "what is the idle rate". **Do not use wall clock as the denominator** — the ticks while a laptop lid was closed never ran |
+| `task-list --line X [--status S] [--json]` | atomically queries one line's tasks; no more grep/awk hand-rolled tables | Dashboard or an Agent needs to list the queue or filter by status |
+| `task-show --line X --task T [--json] [--settlement]` | fetches one task exactly; human-readable by default; `--json` emits `cortex-loop/task-show-v1`; `--settlement` is a read-only explanation of the artifact→commit→origin→canonical exact-blob binding, and missing evidence is explicitly `UNKNOWN`; after an integrator squash/replay, landing is proved by `content-equivalent` and is not mis-bound to commit ancestry | troubleshooting, audit, reading the contract before dispatch, or finding out why a task is stuck in settling; do not hand-roll `git log/ref` into a judgment again |
+| `task-add --line X ...` | generates a task row from the ledger's real header; missing a positive or negative criterion is refused, and a failed contract gate rolls back automatically | adding a task; hand-stitching Markdown columns is forbidden |
+| `task-retry --line X --task T --reason R [--reset-fails]` | atomically requeues a failed task into the current window; done/blocked/human-gate are not quietly reopened | retry immediately after the root cause is fixed |
+| `task-hold --line X --task T --status blocked\|waiting_external --reason R` | atomically holds and stops automatic retry | waiting for external authorization, or a confirmed technical block |
+| `task-resume --line X --task T --reason R` | atomically clears blocked/waiting_external, keeps the failure history, and returns to pending | the blocking condition is resolved |
+| `task-reopen --line X --task T --reason R` | undoes one false completion, clears evidence, increments fails, and atomically returns to pending | the short test was misleading, or the completion claim was overturned by new evidence |
+| `task-run --line X --task T` | executes one task exactly, still through claim → tool adapter → submit → completion gate | an end-to-end smoke, or running only a named task; it burns model quota |
 
-## 自检与对账（零 LLM）
+## Self-check and reconcile (zero LLM)
 
-| 子命令 | 干什么 | 什么时候用 |
+| Subcommand | What it does | When to use it |
 |--------|--------|-----------|
-| `health` | 驱动自检：cron 真实执行失败率 >15% → RED（退出码 1） | 每次 `tick --auto` 前自动跑；怀疑地基坏了也手跑 |
-| `reconcile` | CLOCK **声明** vs launchd/cron **实际** → 输出 DRIFT | 「说部署了但真在跑吗」；改完 CLOCK 必跑 |
-| `dashboard` | 引擎内建的账本总览（与 `bin/cortex-dashboard.sh` 一屏总览互补） | 只想看账本层，不需要全系统 |
-| `why [--node N]` | **信任为什么涨/跌**：逐条追溯每一次加减分 + 识别空转刷分 | 有人问「凭什么这个节点是 L3」；怀疑分数是刷的 |
-| `value` | V1/V2/V3 价值三律机械核验 + 杠杆率（六定律价值侧） | 问「这套东西到底产出了什么价值」 |
+| `health` | driver self-check: cron real-execution failure rate >15% → RED (exit code 1) | runs automatically before every `tick --auto`; also run it by hand when you suspect the foundation is bad |
+| `reconcile` | CLOCK **declaration** vs launchd/cron **reality** → emits DRIFT | "it says deployed, but is it really running?"; required after a CLOCK edit |
+| `dashboard` | the engine's built-in ledger overview (complements the one-screen overview in `bin/cortex-dashboard.sh`) | you only want the ledger layer, not the whole system |
+| `why [--node N]` | **why trust rose or fell**: traces every point added or removed, and identifies no-op score farming | someone asks "why is this node L3"; you suspect the score was farmed |
+| `value` | mechanical check of the V1/V2/V3 value laws plus leverage (the value side of the six laws) | "what value did this thing actually produce" |
 
-## 蜂群协调（多节点 · 零 LLM）
+## Swarm coordination (multi-node · zero LLM)
 
-| 子命令 | 干什么 | 什么时候用 |
+| Subcommand | What it does | When to use it |
 |--------|--------|-----------|
-| `swarm` | 刷新本节点画像 + 打印群体存活表（含无人认领的线） | 想知道哪台机在线、哪条线没人管 |
-| `sync` | ref 层收发心跳（`refs/swarm/<swarm>/beat/<node>`），**不碰工作区** | 每台机定期跑；脏树/坏 auto-sync 都拦不住它 |
-| `lease --line X [--ttl-min N]` | 抢线的 scheduler 租约（git ref CAS 原子锁） | 手工验证锁；`tick --auto` 内部以短租约竞争；worker 生命周期不由此锁住 |
-| `caps` | 全群能力矩阵 + **单点能力告警**（只有一台机有的能力 = 单点故障） | 想知道「这台机掉了会瘸哪条腿」 |
-| `checkin [--out]` | **主线程接入/退出蜂群** —— 与自动节点对等的心跳 | 开始一段有产出的会话时接入；结束时 `--out` |
+| `swarm` | refreshes this node's profile and prints the swarm liveness table (including lines nobody has claimed) | you want to know which machine is online and which line has no owner |
+| `sync` | sends and receives the heartbeat on the ref layer (`refs/swarm/<swarm>/beat/<node>`); **does not touch the worktree** | every machine runs it on a schedule; a dirty tree or a broken auto-sync cannot stop it |
+| `lease --line X [--ttl-min N]` | takes the line's scheduler lease (a git ref CAS atomic lock) | checking the lock by hand; `tick --auto` competes internally with a short lease; a worker lifetime is not held by this lock |
+| `caps` | the swarm-wide capability matrix plus a **single-point capability alert** (a capability only one machine has is a single point of failure) | "if this machine drops, which leg goes lame" |
+| `checkin [--out]` | **the main thread joins or leaves the swarm** — a heartbeat on equal footing with the automatic nodes | join at the start of a session that will produce output; `--out` when it ends |
 
-## 去中心化分发（plan-claim-result · 零 LLM）
+## Decentralized dispatch (plan-claim-result · zero LLM)
 
-> **无 leader、无选举、无 quorum。** git 服务器只提供存储 + ref 的原子 CAS。
-> CLOCK.owner 只提供亲和性提示；短 scheduler lease + 任务级 claim 解决「谁此刻调度」，本族解决「一个计划怎么拆开、被多台机器自主认领并汇总」。
+> **No leader, no election, no quorum.** The git server provides only storage plus atomic CAS on refs.
+> CLOCK.owner provides only an affinity hint. A short scheduler lease plus a task-level claim decides "who schedules right now". This family decides "how one plan is split, claimed autonomously by many machines, and gathered".
 
-| 子命令 | 干什么 | 什么时候用 |
+| Subcommand | What it does | When to use it |
 |--------|--------|-----------|
-| `discover [--publish]` | **自主找活**：扫机械可查的缺口 → 候选任务；`--publish` 才真发 | 环没活干时自己找活。策略是**补低洼**（目标函数降方差，不是求最大值） |
-| `plan` | 发布不可变计划 —— **任何节点都能发** = 去中心化编排入口 | 手工投放一批任务 |
-| `claim` | 自评能力/形态/负载 → CAS 抢任务 | 手工验证认领；`tick --auto` 内部自动跑 |
-| `run` | 认领 → 执行 → 回写一条龙（分发层执行入口） | 想跑完整一轮而不是分三步 |
-| `result` | 认领者回写结果 | `run` 的第三段单独跑 |
-| `gather [--settle]` | 任一节点汇总；**收不齐拒绝宣称完成**。`--settle` 带 CAS 防重复结算 | 计划跑完要结算 |
+| `discover [--publish]` | **find work on its own**: scan mechanically checkable gaps → candidate tasks; `--publish` is what actually publishes | the loop finds its own work when it has none. The strategy is **fill the low spots** (the objective lowers variance; it does not maximize) |
+| `plan` | publish an immutable plan — **any node may publish** = the decentralized orchestration entrance | hand-placing a batch of tasks |
+| `claim` | self-score capability / shape / load → CAS for the task | checking a claim by hand; `tick --auto` runs it automatically inside |
+| `run` | claim → execute → write back, in one chain (the dispatch-layer execution entrance) | you want a full round rather than three separate steps |
+| `result` | the claimer writes the result back | the third stage of `run`, run alone |
+| `gather [--settle]` | any node gathers; **an incomplete gather refuses to claim completion**. `--settle` uses CAS to prevent a double settlement | settling after a plan has run |
 
-### 分布式 Git 交付原子工具
+### Distributed Git delivery atomics
 
-| 工具 | 原子动作 | 关键边界 |
+| Tool | Atomic action | Key boundary |
 |------|----------|----------|
-| `bin/cortex-workspace.sh create/status/release` | 按 attempt 创建稀疏执行舱、查状态、clean 后回收 | 共享 objects、独立 index；磁盘不足/活 owner/foreign owner/脏舱 fail-closed |
-| `bin/cortex-candidate.sh compose/validate/publish/inspect` | 从任意 source commit 向最新 canonical base 覆盖精确文件，再校验写集并发布不可变 candidate ref | `compose` 不 checkout、不碰共享 index；拒绝目录/缺路径；同 OID 幂等，不同 OID 不可覆写 |
-| `bin/cortex-integrator.sh` | blobless 稀疏复验并 lease-CAS 更新 canonical master | `--allow` 可写、`--read` 只读；CAS loser 返回 75 重试 |
-| `bin/cortex-workspace-inspect.py [--json]` | 汇总 workspace/candidate/integration/残锁/磁盘 | 只读；Dashboard `runtime.delivery_plane` 与它同源 |
-| `bin/git-worktree-doctor.py --json [--skip-disk]` | 盘点注册 Agent 舱、认领、活进程、脏改、可回收数 | Dashboard `runtime.worktree_fleet` 与它同源；进程不可读即 UNKNOWN |
-| `bin/git-worktree-doctor.py --claim PATH --owner ID --task ID [--ttl-hours 24]` | 使用者认领/续租 worktree | 中央 claim 含 owner/task/host/pid/heartbeat/expiry；他人活 claim 不可覆盖 |
-| `bin/git-worktree-doctor.py --release-claim PATH --owner ID` | 主动释放认领 | owner 不匹配 fail-closed |
-| `bin/git-worktree-doctor.py --reclaim PATH` | 回收受管目录内的旧 worktree | 仅 clean + 无 claim + 无活进程；保留 branch，detached 未合并 tip 先建 archive ref |
+| `bin/cortex-workspace.sh create/status/release` | create a sparse execution cabin per attempt, query status, reclaim after clean | shared objects, private index; low disk / live owner / foreign owner / dirty cabin is fail-closed |
+| `bin/cortex-candidate.sh compose/validate/publish/inspect` | overlay exact files from any source commit onto the latest canonical base, then check the write set and publish an immutable candidate ref | `compose` does not checkout and does not touch the shared index; it rejects a directory or a missing path; same OID is idempotent, a different OID cannot overwrite |
+| `bin/cortex-integrator.sh` | blobless sparse re-check and lease-CAS update of canonical master | `--allow` writable, `--read` read-only; a CAS loser returns 75 and retries |
+| `bin/cortex-workspace-inspect.py [--json]` | summarize workspace/candidate/integration/stale locks/disk | read-only; Dashboard `runtime.delivery_plane` comes from the same source |
+| `bin/git-worktree-doctor.py --json [--skip-disk]` | inventory registered Agent cabins, claims, live processes, dirty edits, and reclaimable count | Dashboard `runtime.worktree_fleet` comes from the same source; an unreadable process is UNKNOWN |
+| `bin/git-worktree-doctor.py --claim PATH --owner ID --task ID [--ttl-hours 24]` | the user claims or renews a worktree | the central claim holds owner/task/host/pid/heartbeat/expiry; someone else's live claim cannot be overwritten |
+| `bin/git-worktree-doctor.py --release-claim PATH --owner ID` | release a claim on purpose | an owner mismatch is fail-closed |
+| `bin/git-worktree-doctor.py --reclaim PATH` | reclaim an old worktree inside a managed directory | only clean + no claim + no live process; the branch is kept; a detached unmerged tip gets an archive ref first |
 
-调试顺序：先 `workspace status` 看执行舱，再 `candidate inspect` 看跨节点可见性，最后看
-integrator receipt 的 `landed/retryable_*/rejected_*`。candidate 远端可见但未落 master 时，任务必须保持 settling。
+Debug order: `workspace status` first to see the execution cabin, then `candidate inspect` for cross-node visibility, then the
+integrator receipt's `landed/retryable_*/rejected_*`. When a candidate is visible remotely but has not landed on master, the task must stay settling.
 
-## 信任与约束（六定律落地 · 零 LLM）
+## Trust and constraint (six laws landed · zero LLM)
 
-| 子命令 | 干什么 | 什么时候用 |
+| Subcommand | What it does | When to use it |
 |--------|--------|-----------|
-| `trust` | **HAAS 实算 L1–L5**（六定律 C2）：全部从 ref 层实际记录统计，节点**无法自报** | 想知道谁能干多大的事 |
-| `attest [--executor X]` | 验证执行器背后**真的是**声明的模型，三层强度 L-env / L-say / **L-print** | 新节点加入；怀疑自报模型不实 |
-| `fault` | **主线程自记违约** —— 编排者也要被信任机制约束 | 我自己做错了。有扣分机制才叫约束 |
-| `credit` | **主线程记一次自主做成** —— 有扣分必须有加分 | 我自主闭环了一件事 |
-| `readjudicate` | 用**当前判据**重判历史 rejected（冤判复核，**非特赦**） | 判据改严/改准之后。实测过门率 20%→75%（`216a194d0`） |
-| `model` | 各档模型可用性 + 当前选档（额度紧张自动降档） | 撞额度时想知道还剩什么可用 |
+| `trust` | **HAAS computed live, L1–L5** (six-law C2): counted entirely from actual ref-layer records; a node **cannot self-report** | you want to know who may do how much |
+| `attest [--executor X]` | verify that the executor **really is** the declared model, three strengths L-env / L-say / **L-print** | a new node joins; you suspect the self-reported model is false |
+| `fault` | **the main thread records its own breach** — the orchestrator must also be bound by the trust mechanism | I did it wrong. A constraint without a penalty is not a constraint |
+| `credit` | **the main thread records one autonomous completion** — a penalty requires a matching reward | I closed one thing autonomously |
+| `readjudicate` | rejudge historical rejected with the **current criterion** (a review of a wrong judgment, **not a pardon**) | after a criterion is tightened or corrected. Measured gate-pass rate 20%→75% (`216a194d0`) |
+| `model` | availability of each model tier plus the current selection (automatic step-down when quota is tight) | you hit quota and want to know what is still usable |
 
-**L-print 为什么是最硬的一层**：自报和环境变量都是「**声明**」，声明可以撒谎；
-行为分布是「**表现**」，装不了。`attest` 最强一档走 [[model-fingerprint/SKILL|model-fingerprint]]（Bruckner PAMELA）——
-单 token 输出分布 = 模型身份，算 Jensen-Shannon 散度比对。
-该 skill 2026-07-21 实证：cosplay「claude 贴 gemini」被 JSD=0.0 当场抓出。
+**Why L-print is the hardest layer**: self-report and environment variables are both a **declaration**, and a declaration can lie;
+a behavior distribution is a **performance**, and it cannot be faked. The strongest `attest` tier goes through [[model-fingerprint/SKILL|model-fingerprint]] (Bruckner PAMELA) —
+a single-token output distribution is model identity, compared by Jensen-Shannon divergence.
+That skill's 2026-07-21 evidence: a cosplay of "claude pasted over gemini" was caught on the spot at JSD=0.0.
 
-**透明度封顶**（operator 2026-07-29 拍板）：结构化信息越透明、越可验证，信任才越高；
-信息缺失或无法验证 → **信任被封顶**。所以**伪装没有收益** —— 装得再漂亮也换不来自主权。
+**Transparency cap** (operator decision, 2026-07-29): the more transparent and verifiable the structured information, the higher trust can go;
+missing or unverifiable information → **trust is capped**. So **disguise has no payoff** — however pretty the costume, it does not buy autonomy.
 
-| 透明度状态 | 上限 |
+| Transparency state | Cap |
 |-----------|------|
-| 字段齐全 + attest 通过 | 不封顶（可到 L5） |
-| 缺字段 / 未公开 `model.*` `billing.*` / 未做 attest | 封顶 **0.70**（最高 L3，只能干可逆的事） |
-| attest **失败**（自报 ≠ 实测） | 记违约 + 封顶 **0.49**（打回 L1，只能读） |
+| fields complete + attest passed | no cap (can reach L5) |
+| a field missing / `model.*` `billing.*` not published / attest not done | capped at **0.70** (L3 at most; only reversible work) |
+| attest **failed** (self-report ≠ measured) | a breach is recorded + capped at **0.49** (back to L1; read only) |
 
-## AI 挂载点（唯一会烧额度的两个）
+## AI mount points (the only two that burn quota)
 
-| 子命令 | 干什么 | 什么时候用 |
+| Subcommand | What it does | When to use it |
 |--------|--------|-----------|
-| `decompose --line X [--apply]` | AI 把 INTENT 拆成任务行 → **结构验收后**写 `TASKS.proposed.md`；`--apply` 才并入账本 | 新线只有意图、还没有任务表时 |
-| `judge --line X --task T` | AI 独立验收员看产出，只回 `REJECT:` 或 `ACCEPT`（第三态 `SCOPE` 单列，不压成 REJECT） | 探索型任务，机械门过了但怀疑内容空泛 |
+| `decompose --line X [--apply]` | AI splits INTENT into task rows → writes `TASKS.proposed.md` **after structural acceptance**; `--apply` is what merges into the ledger | a new line has only intent and no task table yet |
+| `judge --line X --task T` | an independent AI acceptor looks at the output and returns only `REJECT:` or `ACCEPT` (the third state `SCOPE` is listed on its own and is not flattened into REJECT) | an exploratory task; the mechanical gate passed but the content looks empty |
 
-> `decompose` 的结构验收是**机械的**：11 列不齐 / `status≠pending` / `success_criteria` 或 `failure_modes` 为 `-` / id 重复 → 整行丢弃并打印原因。mock 实测：3 行提议丢 2 行（M2 缺 `failure_modes`、M3 `status` 非法），通过 1 行。
-> **Agent Code Gauntlet 默认门**（2026-08-02）：`decompose` 生成代码实现 / 多文件改动 / 高风险执行任务时，必须把验收写在实现前：`success_criteria` + 可跑 `short_test` + `out_of_scope`。主线程默认只编排/验证，执行交给 HIVE/sub-agent/worker；生产库/钱/权限/账务即使门绿也停等 operator 点闸；并行代码任务走独立 worktree/隔离 cwd。小改、纯查询、低风险机械命令可直做。
+> Structural acceptance in `decompose` is **mechanical**: 11 columns not aligned / `status≠pending` / `success_criteria` or `failure_modes` is `-` / duplicate id → the whole row is discarded and the reason is printed. Mock measurement: 3 proposed rows, 2 discarded (M2 missing `failure_modes`, M3 `status` illegal), 1 passed.
+> **Agent Code Gauntlet default gate** (2026-08-02): when `decompose` generates a code implementation, a multi-file change, or a high-risk execution task, acceptance must be written before implementation: `success_criteria` + a runnable `short_test` + `out_of_scope`. The main thread only orchestrates and verifies by default; execution goes to HIVE / sub-agent / worker. Production databases, money, permissions, and accounting stop for an operator gate even when the gate is green. Parallel code tasks use an independent worktree / isolated cwd. Small edits, pure queries, and low-risk mechanical commands may be done directly.
 
-## 对外与自愈
+## External and self-heal
 
-| 子命令 | 干什么 | 什么时候用 |
+| Subcommand | What it does | When to use it |
 |--------|--------|-----------|
-| `api` | **对外统一入口**：同一道六定律门，JSON 出参 | 别的系统要调环。`bin/cortex-loop-mcp.py` 走同一道门 |
-| `revive` | 自愈：诊断执行器 → 能修则修 → **修不了就摘能力让蜂群绕过** → 恢复后自动上线 | 执行器挂了 |
-| `harness-run [title...] [--timeout N] [--json]` | 真实驱动**姊妹仓库** `cortex-harness/packages/agent-runtime` 跑一次 local-MVP（`scripts/cortex-local-mvp.mjs` → `executeCliEntry()`），把手敲 `pnpm --filter @cortex/agent-runtime` 收口成一个入口 | 要验 agent-runtime 接线是否还活着；**不是** tick 的替代品 |
+| `api` | **the single external entrance**: the same six-law gate, JSON out | another system needs to call the loop. `bin/cortex-loop-mcp.py` uses the same gate |
+| `revive` | self-heal: diagnose the executor → fix it if it can be fixed → **if it cannot, drop the capability so the swarm routes around it** → come back online automatically after recovery | an executor is down |
+| `harness-run [title...] [--timeout N] [--json]` | actually drive the **sister repo** `cortex-harness/packages/agent-runtime` through one local-MVP (`scripts/cortex-local-mvp.mjs` → `executeCliEntry()`), closing the hand-typed `pnpm --filter @cortex/agent-runtime` into one entrance | checking that the agent-runtime wiring is still alive; **not** a substitute for tick |
 
-> **最有效的复活不是修好挂掉的那个模型，是切到还活着的那个。**
-> 额度耗尽是单点问题，蜂群有多节点多模型 —— 该做的是路由绕过，不是死等它恢复。
-> 「宣告能力下线」这一步最关键：**不用修好，环也能继续跑**。
-> `diagnose_executor` 先纯代码分类根因（missing / path / auth / quota / network / proxy / config / ok），
-> **别一上来就叫模型** —— 根因类决定能不能自动修，`quota` 类**不该修，该绕过**。
+> **The most effective revival is not repairing the model that died. It is switching to the one that is still alive.**
+> Quota exhaustion is a single-point problem. The swarm has many nodes and many models — the move is to route around it, not to wait for it to recover.
+> The "declare the capability offline" step is the critical one: **the loop can keep running without the repair**.
+> `diagnose_executor` classifies the root cause in plain code first (missing / path / auth / quota / network / proxy / config / ok).
+> **Do not call a model first** — the cause class decides whether it can be fixed automatically. A `quota` class **should not be fixed. It should be routed around**.
 
-> **`harness-run` 诚实边界**（2026-08-21 HANDOFF Q2 接线）：`agent-runtime` 目前只有一个验证
-> 运行时脚手架（session/goal/lease/durable-autonomy loop）的**合成 2 步 executor**，不调用任何
-> LLM、不做真实业务任务。跑通只证明「ob1 → cortex-harness 的接线可达」，不代表 agent-runtime
-> 已具备真实执行能力。路径可用 `CORTEX_HARNESS_DIR` 覆盖（默认 `~/cortex-harness`）；
-> node 版本按该仓 `engines`（`>=24.0.0 <25`）自动挑 `~/.nvm/versions/node/v24.*` 里最高 patch，
-> 找不到则显式报 `node_v24_missing`，不会静默降级到不满足声明的版本（T5）。
+> **`harness-run` honesty boundary** (2026-08-21 HANDOFF Q2 wiring): `agent-runtime` currently has only one verification
+> runtime scaffold (session/goal/lease/durable-autonomy loop) with a **synthetic 2-step executor**. It calls no
+> LLM and does no real business task. A successful run proves only that "the wiring from ob1 to cortex-harness is reachable". It does not mean agent-runtime
+> can really execute. The path can be overridden with `CORTEX_HARNESS_DIR` (default `~/cortex-harness`).
+> The node version follows that repo's `engines` (`>=24.0.0 <25`) and automatically picks the highest patch under `~/.nvm/versions/node/v24.*`.
+> If none is found it reports `node_v24_missing` explicitly and does not silently degrade to a version that fails the declaration (T5).
 
 ---
 
@@ -144,4 +146,4 @@ integrator receipt 的 `landed/retryable_*/rejected_*`。candidate 远端可见�
 ---
 
 <!-- cortex:map-backlink d-299b7f1d69b17515abad28ce -->
-关联地图：[[skills/cortex-loop/MAP|Cortex Loop 全景地图]]
+Related map: [[skills/cortex-loop/MAP|Cortex Loop panorama]]

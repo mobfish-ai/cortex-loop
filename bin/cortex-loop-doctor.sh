@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# cortex-loop-doctor — 一键跑 pipeline 健康探针（只读，默认不清理）
+# cortex-loop-doctor — one-shot pipeline health probes (read-only; does not clean by default)
 #
-# 2026-07-31 从「日额度满 / 僵尸 tick / artifact 不过门 / 15min 空等」检修路径沉淀。
-# 退出码：0=关键探针全 YES  1=有 NO  2=有 UNKNOWN 无 NO（探不清）
+# 2026-07-31 distilled from the repair path: daily quota full / zombie tick / artifact fails the gate / 15min idle wait.
+# Exit code: 0=every critical probe YES  1=some NO  2=some UNKNOWN and no NO (could not tell)
 #
-# 用法：
+# Usage:
 #   bin/cortex-loop-doctor.sh
 #   bin/cortex-loop-doctor.sh --json
-#   bin/cortex-loop-doctor.sh --fix   # 先跑 cleanup（非 force）
+#   bin/cortex-loop-doctor.sh --fix   # run cleanup first (not --force)
 #   bin/cortex-loop-doctor.sh --line cortex-immune
-#   bin/cortex-loop-doctor.sh --promote          # NO 缺陷类探针 → task-add（IMM-T46）
+#   bin/cortex-loop-doctor.sh --promote          # NO defect probes -> task-add (IMM-T46)
 #   bin/cortex-loop-doctor.sh --promote --dry-run
 #
-# 跑批效率报告（另工具）：
+# Batch efficiency report (separate tool):
 #   bin/cortex-loop-run-report.sh --line cortex-immune --id-min 34 --id-max 44
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -42,7 +42,7 @@ if [ "$FIX" -eq 1 ]; then
   bash bin/cortex-loop-cleanup-stuck-tick.sh 2>&1 || true
 fi
 
-# 每项：probe名 + 可选参数数组用 shell 词拆
+# Each item: probe name + optional args split as shell words
 run_one() {
   local name="$1"; shift
   local out rc st
@@ -86,7 +86,7 @@ print(json.dumps({"yes":yes,"no":no,"unknown":unk,"line":line,"probes":items}, e
 PY
 fi
 
-# IMM-T46：有 NO 时可选自动 promote（缺陷类探针 + short_test，不假绿）
+# IMM-T46: when there is a NO, optionally auto-promote (defect probes + short_test, no fake green)
 if [ "$PROMOTE" -eq 1 ] && [ "$no" -gt 0 ]; then
   promo_args=(--line "$LINE")
   [ "$PROMOTE_DRY" -eq 1 ] && promo_args+=(--dry-run)

@@ -14,5 +14,7 @@ jobs:
           python-version: "3.12"
       - name: sensitive-string gate
         run: bash scripts/public-hygiene.sh
+      - name: cjk source gate
+        run: python3 scripts/cjk-source-gate.py
       - name: cortex-loop suite
         run: bash bin/cortex-loop-tests/suite.sh

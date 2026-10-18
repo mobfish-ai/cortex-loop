@@ -4,28 +4,28 @@
 # setting a proxy. HTTP_PROXY / HTTPS_PROXY are inherited from the caller.
 #
 # cortex-loop adapter: minimax — cheap text channel, keys from the environment
-# 约定接口：$1=提示词文件  $2=结果文件
+# Contract: $1=prompt file  $2=result file
 #
-# 定位（重要，别把它当主力，也别当 judge）：
-#   MiniMax-M2.7 干**有明确规格**的活 —— 照 fix-brief 改代码、拆任务、写文案、
-#   结构化修复。规格越明确、越像"填空"，越适合它。
-#   ⛔ 绝不给它 judge（质量否决）：铁律是「AI 只有否决权」，弱模型误否决的成本
-#      高于漏放——会把好产出打回、让环空转，看起来还很尽责。
-#   ⛔ 也绝不给它写 status/done：完成判定永远只走机械门（cortex-loop try-complete），
-#      不采信任何 LLM 自称"完成"。
-#   与 claude.sh 的分工：需强推理/高 stakes（架构决策、正确性有争议、牵一发动全身）
-#      才上 Claude 订阅；CLAUDE.md 铁律「脚本/cron/自动化 优先 GLM/Gemini/OpenAI，
-#      禁 Anthropic API」——本 adapter + glm.sh + cheap.sh 就是那条铁律在
-#      cortex-loop 无人值守场景下的落地面。2026-07-30 operator 追加拍板：
-#      MiniMax 优先于 GLM（4 个账号都有额度，比 GLM 更充裕）——见 cheap.sh 的降级链。
+# Role (important: do not treat it as the primary worker, and do not use it as judge):
+#   MiniMax-M2.7 does **well-specified** work -- edit code from a fix-brief, split tasks, write copy,
+#   structured fixes. The clearer the spec, the more it resembles filling blanks, the better it fits.
+#   NEVER give it judge (quality veto): the rule is "AI has only a veto". A weak model's false veto
+#      costs more than a miss -- it bounces good output and spins the loop while looking diligent.
+#   NEVER let it write status/done: completion always goes through the mechanical gate (cortex-loop try-complete).
+#      Do not trust any LLM that claims it is "done".
+#   Split with claude.sh: Claude subscription only for hard reasoning / high stakes (architecture, disputed correctness, wide blast radius).
+#      CLAUDE.md says "scripts/cron/automation prefer GLM/Gemini/OpenAI,
+#      no Anthropic API" -- this adapter + glm.sh + cheap.sh is that rule
+#      applied to unattended cortex-loop. Extra operator decision on 2026-07-30:
+#      MiniMax before GLM (all 4 accounts had quota, more than GLM) -- see the fallback chain in cheap.sh.
 #
-# 多 key 配置：见 _openai_compat_lib.sh oc_ordered_keys() —— 读
-#   models.providers.minimax.apiKey + .apiKeys[]（数组，新约定）
-#   models.providers.minimax-cn.apiKey + .apiKeys[]（国内直连账号，同一模型 id）
-#   外加 env MINIMAX_API_KEYS（逗号分隔，临时补位用，套用 minimax 的 base_url）
+# Multi-key config: see _openai_compat_lib.sh oc_ordered_keys() -- read
+#   models.providers.minimax.apiKey + .apiKeys[] (array, new convention)
+#   models.providers.minimax-cn.apiKey + .apiKeys[] (direct-connect account, same model id)
+#   plus env MINIMAX_API_KEYS (comma-separated, temporary fill-in, using minimax's base_url)
 #   Extra account keys go in ~/.openclaw/openclaw.json,
-#   在 models.providers.minimax 下加一个 "apiKeys": ["sk-...", "sk-...", "sk-..."]
-#   数组字段（与已有的 apiKey 字段并存，不用删旧的）。见本任务报告 §G2 操作步骤。
+#   Under models.providers.minimax add an "apiKeys": ["sk-...", "sk-...", "sk-..."]
+#   array field (keep the existing apiKey field; do not delete it). See this task report section G2.
 set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
@@ -35,7 +35,7 @@ source "$DIR/_openai_compat_lib.sh"
 
 PROMPT="$1"; RESULT="$2"
 
-# 模型热切换：env 覆盖 > model-policy.sh(governance/model-policy.json) > 兜底字面量
+# Hot model switch: env override > model-policy.sh (governance/model-policy.json) > fallback literal
 MODEL="${CORTEX_MINIMAX_MODEL:-}"
 if [[ -z "$MODEL" ]]; then
     MODEL="$(bash "$OB1_ROOT/bin/model-policy.sh" get cortex.adapter.cheap.minimax 2>/dev/null)"
@@ -80,9 +80,9 @@ if [[ -n "${CORTEX_MINIMAX_CN_NODES:-}" ]]; then
 fi
 PROVIDERS_ORDER="${CORTEX_MINIMAX_PROVIDERS:-$PROVIDERS_ORDER}"
 
-# 已知坑（skills/ce-minimax-api-low-surrogate-fix）：prompt 里的 emoji/非 BMP 字符
-# 会让 MiniMax 内部 UTF-8→UTF-16 转换报 "no low surrogate in string" 400 错误。
-# 主动过滤一遍（保留 ASCII + CJK 常用区 + 换行/空格/Tab），不等它报错才处理。
+# Known pitfall (skills/ce-minimax-api-low-surrogate-fix): emoji / non-BMP characters in the prompt
+# make MiniMax's internal UTF-8 to UTF-16 conversion return 400 "no low surrogate in string".
+# Filter first (keep cp <= 0x9FFF, including ASCII and CJK U+4E00-U+9FFF, plus U+F000-U+F0FF). Do not wait for the error.
 FILTERED_PROMPT="$(mktemp /tmp/oc-minimax-prompt.XXXXXX)"
 python3 - "$PROMPT" "$FILTERED_PROMPT" <<'PYEOF'
 import sys
@@ -100,20 +100,20 @@ PYEOF
 
 ORDERED="$(oc_ordered_keys "$PROVIDERS_ORDER" "MINIMAX_API_KEYS" "$STATE_FILE" "$COOLDOWN")"
 if [[ -z "$ORDERED" ]]; then
-    echo "[adapter] 无可用 MiniMax key（openclaw.json 未配置 models.providers.minimax(-cn).apiKey）" > "$RESULT"
+    echo "[adapter] no usable MiniMax key (openclaw.json has no models.providers.minimax(-cn).apiKey)" > "$RESULT"
     rm -f "$FILTERED_PROMPT"
     exit 89
 fi
 TOTAL="$(printf '%s\n' "$ORDERED" | grep -c .)"
 
-# 只有 <2 把 key 时，"两节点各自优先不同 key"这件事名存实亡（两节点会退化成
-# 争抢同一把）——不要静默，明确告诉 operator 该补 key 了（operator 提到实际有 4 个
-# MiniMax 账号，目前 openclaw.json 只登记了其中的一部分）。
+# With fewer than 2 keys, "each node prefers a different key" is empty (both nodes fall back to
+# fighting over the same key) -- do not stay silent; tell the operator to add keys (they said there are 4
+# MiniMax accounts, and openclaw.json currently registers only some of them).
 if [[ "$TOTAL" -lt 2 ]]; then
     {
-        echo "[adapter] ⚠️ 提示：MiniMax 当前只有 ${TOTAL} 把可用 key，多个节点会共用同一把（无法错峰）。"
-        echo "[adapter] ⚠️ 补齐步骤：编辑 ~/.openclaw/openclaw.json → models.providers.minimax（或 minimax-cn）→"
-        echo "[adapter]    加一个 \"apiKeys\": [\"sk-...\", \"sk-...\"] 数组字段（与已有 apiKey 并存，不用删旧的）。"
+        echo "[adapter] warning: MiniMax currently has only ${TOTAL} usable key(s); multiple nodes will share one key (cannot stagger)."
+        echo "[adapter] warning: to add keys, edit ~/.openclaw/openclaw.json -> models.providers.minimax (or minimax-cn) ->"
+        echo "[adapter]    add an \"apiKeys\": [\"sk-...\", \"sk-...\"] array field (keep the existing apiKey; do not delete it)."
     } >&2
 fi
 
@@ -141,7 +141,7 @@ if [[ $success -eq 1 ]]; then
 fi
 
 {
-    echo "[adapter] minimax 全部 ${attempts} 个 key 失败：${summary}"
+    echo "[adapter] minimax all ${attempts} keys failed: ${summary}"
     echo "[adapter] executor=minimax model=$MODEL rc=97"
 } > "$RESULT"
 exit 97

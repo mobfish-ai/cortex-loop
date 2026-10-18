@@ -1,3 +1,5 @@
+English | [简体中文](OPEN-SOURCE-EXPORT.zh-CN.md)
+
 # cortex-loop open-source export
 
 Target repo: `mobfish-ai/cortex-loop`.
@@ -12,7 +14,7 @@ License: Apache-2.0.
 - `skills/cortex-loop/` — operator skill and references
 - `examples/launchd/` and `examples/systemd/` — generic schedulers
 - `LICENSE` `NOTICE` `README.md` `CHANGELOG.md`
-- `.github/workflows/test.yml` and `scripts/public-hygiene.sh`
+- `.github/workflows/test.yml`, `scripts/public-hygiene.sh`, and `scripts/cjk-source-gate.py`
 
 ## Never publish
 

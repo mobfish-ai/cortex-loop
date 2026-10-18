@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # cortex-loop:requires-env PATH HTTP_PROXY HTTPS_PROXY
-# 说明：codex CLI 同样需要出网代理
-# cortex-loop adapter: codex — 必须走 bin/codex-validate.sh 封装（禁裸 codex exec）
-# 约定接口：$1=提示词文件  $2=结果文件
+# Note: the codex CLI also needs an outbound proxy
+# cortex-loop adapter: codex — must go through bin/codex-validate.sh (no bare codex exec)
+# Contract: $1=prompt file  $2=result file
 set -uo pipefail
 PROMPT="$1"; RESULT="$2"
 OB1_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -25,6 +25,6 @@ OUT="/tmp/panel-$TOPIC/codex.out"
 if [[ -s "$OUT" ]]; then
   cp "$OUT" "$RESULT"
 else
-  echo "[adapter] codex 无输出（退出码 ${rc}）" > "$RESULT"
+  echo "[adapter] codex produced no output (exit code ${rc})" > "$RESULT"
 fi
 exit $rc

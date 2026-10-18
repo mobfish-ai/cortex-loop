@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B2 杀手负测：discovery 必须冻结且可追溯；learning 只能来自有效 passed 世界证据。"""
+"""B2 killer negative test: discovery must be frozen and traceable; learning may come only from valid passed world evidence."""
 import contextlib
 import importlib.machinery
 import importlib.util

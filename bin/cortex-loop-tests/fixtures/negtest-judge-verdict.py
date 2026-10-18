@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
-"""负向测试：验收员的**标签本身**要机械核验，不能照单全收。
+"""Negative test: the verifier's label itself must be checked mechanically, not taken at face value.
 
-2026-07-29 真机根因（21/25 result 倒在这里）：
-  ai_judge 的 prompt 已明写「执行器被硬性禁止改 bounds 之外的文件，
-  所以『它没去改 bounds 外的 X』永远不构成 REJECT 理由」，并提供 SCOPE 第三态。
-  验收员**仍然**回 REJECT，理由是「只加了 host: 一行，没跑 generate-taxonomy.py、
-  没登记进 SKILLS-TAXONOMY.md」—— 点名的两个路径全在 bounds 外。
+Live root cause on 2026-07-29 (21/25 results died here):
+  The ai_judge prompt already says the executor is hard-forbidden from editing files outside bounds,
+  so "it did not edit X outside bounds" is never a REJECT reason, and it offers the SCOPE third state.
+  The verifier still replied REJECT because "it only added a host: line, did not run generate-taxonomy.py,
+  and did not register impeccable in SKILLS-TAXONOMY.md" -- both named paths are outside bounds.
 
-  上一版只对 SCOPE 分支做反向核验（点名路径若在界内 → 改判 REJECT），
-  REJECT 分支照单全收 → **换个标签说同一件事就绕过了整道防线**。
+  The previous version only reverse-checked the SCOPE branch (a named path inside bounds -> REJECT).
+  The REJECT branch was accepted as-is, so saying the same thing under a different label bypassed the gate.
 
-教训：不能靠 prompt 让 LLM 自觉选对标签；**它选的标签本身也要机械验**。
-这不是放宽门 —— 界内没干好仍然 REJECT，只是把「界外的事」正确改判为 SCOPE。
+Lesson: do not rely on the prompt to make the LLM pick the right label; the chosen label must be checked too.
+This does not loosen the gate -- unfinished work inside bounds is still REJECT. Out-of-bounds complaints
+that the verifier labels REJECT stay REJECT; the system does not relabel them as SCOPE.
 
-本测试直接调 _judge_verdict_from_text（纯函数，不调模型、不烧额度）。
+This test calls _judge_verdict_from_text directly (pure function, no model, no quota).
 """
 import importlib.machinery
 import importlib.util
@@ -28,44 +29,45 @@ loader.exec_module(cl)
 
 BOUNDS = "skills/impeccable/"
 
-# (标签, 验收员原始输出, 期望判定)
+# (label, raw verifier output, expected verdict)
 CASES = [
-    # ── 红线：不许替验收员改标签（一次被推翻的修复，本条防它复活）────
-    # 我曾让「REJECT 理由全在界外」自动改判 SCOPE，依据是 13:34 实测仍被 REJECT。
-    # 但那一拍跑的是**修复前的代码**（日志里的旧字符串在当前代码中 0 处命中）。
-    # 前提不成立，且替 AI 改标签是放宽门的隐蔽形式 —— 它把「验收员说不行」
-    # 变成「系统说其实行」。真实证据相反：判据换成 short_test 后，
-    # 同一产出同一验收员 11:09 REJECT → 13:41 ACCEPT。
-    # 本条锁死：**验收员说 REJECT 就是 REJECT，系统不替它翻案。**
-    ("验收员 REJECT 理由全在界外 → 仍然 REJECT（不许系统替它翻案）",
-     "REJECT: 只加了 SKILL.md 里的 host: html-master 一行 frontmatter，"
-     "但没跑 bin/generate-taxonomy.py 重新生成树、"
-     "也没把 impeccable 登记进 skills/SKILLS-TAXONOMY.md",
+    # -- red line: do not relabel the verifier (a reverted fix; this case keeps it dead) --
+    # I once auto-relabeled "REJECT whose reasons are all outside bounds" to SCOPE, because
+    # the 13:34 live tick was still REJECT. That tick ran the pre-fix code (the old log string
+    # hits 0 times in the current code). The premise was false, and relabeling the AI is a
+    # hidden way to loosen the gate: "the verifier said no" becomes "the system says it is fine".
+    # The real evidence went the other way: after the criterion became short_test, the same
+    # output and the same verifier went 11:09 REJECT -> 13:41 ACCEPT.
+    # This case locks it: a verifier REJECT stays REJECT. The system does not overturn it.
+    ("verifier REJECT whose reasons are all outside bounds -> still REJECT (no system override)",
+     "REJECT: only added a host: html-master frontmatter line in SKILL.md, "
+     "but did not rerun bin/generate-taxonomy.py to rebuild the tree, "
+     "and did not register impeccable in skills/SKILLS-TAXONOMY.md",
      "REJECT"),
 
-    # ── 界内没干好 → 必须仍然 REJECT（不许放宽）─────────────────
-    ("界内空泛套话 → 保持 REJECT",
-     "REJECT: 内容全是教科书模板，没有针对本机实况的任何具体信息",
+    # -- unfinished inside bounds -> must stay REJECT (do not loosen) --
+    ("generic boilerplate inside bounds -> stay REJECT",
+     "REJECT: the content is all textbook template, with no concrete facts about this machine",
      "REJECT"),
-    ("点名的路径在界内 → 保持 REJECT",
-     "REJECT: skills/impeccable/SKILL.md 里 host 字段写错了，指向不存在的 host",
+    ("named path is inside bounds -> stay REJECT",
+     "REJECT: the host field in skills/impeccable/SKILL.md is wrong and points at a missing host",
      "REJECT"),
-    ("界内界外混合点名 → 保持 REJECT（不是全部界外）",
-     "REJECT: skills/impeccable/SKILL.md 没写完整，"
-     "而且没登记进 skills/SKILLS-TAXONOMY.md",
+    ("mixed inside and outside names -> stay REJECT (not entirely outside)",
+     "REJECT: skills/impeccable/SKILL.md is incomplete, "
+     "and it was not registered in skills/SKILLS-TAXONOMY.md",
      "REJECT"),
-    ("没点名任何路径的 REJECT → 保持 REJECT",
-     "REJECT: 产出过于简略",
+    ("REJECT that names no path -> stay REJECT",
+     "REJECT: the output is too thin",
      "REJECT"),
 
-    # ── 正常通过与显式 SCOPE 不受影响 ───────────────────────────
-    ("ACCEPT 原样放行",
+    # -- a normal pass and an explicit SCOPE are unchanged --
+    ("ACCEPT passes through unchanged",
      "ACCEPT", "ACCEPT"),
-    ("显式 SCOPE 且路径在界外 → SCOPE",
-     "SCOPE: skills/SKILLS-TAXONOMY.md bin/generate-taxonomy.py | 任务定义太窄",
+    ("explicit SCOPE with paths outside bounds -> SCOPE",
+     "SCOPE: skills/SKILLS-TAXONOMY.md bin/generate-taxonomy.py | task definition too narrow",
      "SCOPE"),
-    ("显式 SCOPE 但路径在界内 → 改判 REJECT（原有防线不许退化）",
-     "SCOPE: skills/impeccable/SKILL.md | 说是超范围",
+    ("explicit SCOPE but the path is inside bounds -> relabel REJECT (existing defense must not regress)",
+     "SCOPE: skills/impeccable/SKILL.md | claimed out of scope",
      "REJECT"),
 ]
 
@@ -74,12 +76,12 @@ for label, raw, want in CASES:
     got, why = cl._judge_verdict_from_text(raw, BOUNDS)
     ok = (got == want)
     fails += 0 if ok else 1
-    print("%s  %-44s 判定=%-7s 期望=%s"
+    print("%s  %-44s verdict=%-7s want=%s"
           % ("PASS" if ok else "FAIL", label, got, want))
     if not ok:
-        print("       ↳ 引擎理由：%s" % why[:140])
+        print("       engine reason: %s" % why[:140])
 
 print()
-print("验收员标签机械核验：%s（%d 个断言失败）"
-      % ("全绿" if fails == 0 else "有失败", fails))
+print("verifier-label mechanical check: %s (%d assertions failed)"
+      % ("ALL PASS" if fails == 0 else "FAILED", fails))
 sys.exit(1 if fails else 0)

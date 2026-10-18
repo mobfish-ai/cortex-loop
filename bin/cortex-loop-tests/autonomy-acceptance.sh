@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# cortex-loop 自主闭环验收门 —— 回答「达标了吗」用数字，不用形容词。
+# cortex-loop autonomy closed-loop acceptance gate -- answer "did it meet the bar?" with numbers, not adjectives.
 #
-# 为什么要这个：operator 连问两次「这个到底验证得怎么样」。
-# 用散文回答等于让我自己给自己打分 —— 同一个观察者评自己的产出，
-# 盲区完全重合（epiplexity 公理 1）。所以判据必须机械、可重跑、不经我口。
+# Why this exists: the operator asked twice "how well is this actually verified?"
+# Answering in prose is grading your own work -- the same observer scoring its own output,
+# so the blind spots coincide (epiplexity axiom 1). The criteria must be mechanical, rerunnable, and not spoken by me.
 #
-# 判据全部读**执行真相**（git ref + 任务账本 + 进程/调度器实况），
-# 不读任何「自报完成」的文字。
+# Every criterion reads execution truth (git refs + the task ledger + process/scheduler state),
+# never text that "reports itself done".
 #
-# 用法：bash bin/cortex-loop-tests/autonomy-acceptance.sh [--verbose]
-# 退出码：0=全过  1=有未达标项  2=环境不具备（无法判定，**不算通过**）
+# Usage: bash bin/cortex-loop-tests/autonomy-acceptance.sh [--verbose]
+# Exit code: 0 = all pass  1 = something missed the bar  2 = environment cannot judge (**not a pass**)
 
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 2
@@ -23,74 +23,74 @@ bad()  { echo "  ❌ $1"; FAIL=$((FAIL+1)); }
 huh()  { echo "  ⚠️  $1"; UNKNOWN=$((UNKNOWN+1)); }
 note() { [[ $VERBOSE -eq 1 ]] && echo "       $1"; return 0; }
 
-echo "cortex-loop 自主闭环验收 · 蜂群 $SWARM"
+echo "cortex-loop autonomy closed-loop acceptance | swarm $SWARM"
 echo "════════════════════════════════════════════════════════"
 
-# ── A1 自主找活 ──────────────────────────────────────────────
-# 判据：discover 实扫出候选，且**含治理/低洼类**（不只是硬编码的固定清单）
+# -- A1 find work on its own --
+# Criterion: discover really scans candidates, and they include governance/lowland kinds (not only a hard-coded fixed list)
 echo
-echo "A1 · 自主找活（不靠人喂任务清单）"
+echo "A1 | find work on its own (not a human-fed task list)"
 DISC=$(timeout 600 python3 bin/cortex-loop discover 2>&1)
 N_CAND=$(echo "$DISC" | grep -cE '^\| [0-9]+\.[0-9]+ \|')
 if [[ $N_CAND -ge 1 ]]; then
-  ok "扫出 $N_CAND 条候选"
+  ok "scanned $N_CAND candidates"
 else
-  bad "扫不出候选（自主找活失效）"
+  bad "scanned no candidates (finding work on its own failed)"
 fi
-# 治理类来源：合同欠账 / 低洼 / 坏数据 / frontmatter —— 有任一即算接上 EVO 治理
+# Governance sources: contract debt / lowland / bad data / frontmatter -- any one counts as wired to EVO governance
 if echo "$DISC" | grep -qE 'debt-|lowland-|island-|marker-|fm-'; then
-  ok "候选含 EVO 治理类（合同欠账/低洼/坏数据/元数据）"
+  ok "candidates include EVO governance kinds (contract debt / lowland / bad data / metadata)"
 else
-  bad "候选里没有治理类 —— 只会做固定清单，不算自主治理"
+  bad "no governance kinds in the candidates -- it only does a fixed list, which is not autonomous governance"
 fi
 
-# ── A2 自主派发 ──────────────────────────────────────────────
+# -- A2 dispatch on its own --
 echo
-echo "A2 · 自主派发（跨节点，不靠人分配）"
+echo "A2 | dispatch on its own (across nodes, not assigned by a human)"
 PLANS=$(git ls-remote origin "refs/swarm/$SWARM/plan/*" 2>/dev/null | wc -l | tr -d ' ')
 if [[ "${PLANS:-0}" -ge 2 ]]; then
-  ok "累计派发 $PLANS 轮计划"
+  ok "dispatched $PLANS plans in total"
 else
-  huh "只有 ${PLANS:-0} 轮计划（样本不足，无法判定）"
+  huh "only ${PLANS:-0} plans (sample too small to judge)"
 fi
 NODES=$(git ls-remote origin "refs/swarm/$SWARM/beat/*" 2>/dev/null \
         | sed 's|.*/beat/||' | sort -u | wc -l | tr -d ' ')
 if [[ "${NODES:-0}" -ge 2 ]]; then
-  ok "蜂群 $NODES 个节点在心跳"
+  ok "swarm has $NODES nodes heartbeating"
 else
-  bad "只有 ${NODES:-0} 个节点 —— 单节点不构成蜂群"
+  bad "only ${NODES:-0} nodes -- one node is not a swarm"
 fi
 
-# ── A3 自主完成 ──────────────────────────────────────────────
-# 这是最硬的一项：同源指标合同 + 可追溯 receipt，不在验收脚本里另造阈值。
+# -- A3 finish on its own --
+# The hardest item: a shared metric contract plus a traceable receipt. Do not invent a threshold inside this script.
 echo
-echo "A3 · 自主完成（过机械门，不是自报完成）"
+echo "A3 | finish on its own (through the mechanical gate, not a self-report)"
 METRICS=$(timeout 180 python3 bin/cortex-metrics.py --json 2>/dev/null)
 if [[ $? -ne 0 || -z "$METRICS" ]]; then
-  huh "指标合同来源不可读（无法判定自主完成）"
+  huh "metric contract source is unreadable (cannot judge autonomous completion)"
 else
   G2_STATE=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["g2"]["sample_state"])' <<<"$METRICS" 2>/dev/null)
   G2_TARGET=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["g2"]["threshold_state"])' <<<"$METRICS" 2>/dev/null)
   if [[ "$G2_STATE" == "PASS" && "$G2_TARGET" == "RATIFIED" ]]; then
-    ok "G2 滚动窗目标已批准且达标"
+    ok "G2 rolling-window target is ratified and met"
   else
-    huh "G2=${G2_STATE}、target=${G2_TARGET}；无批准阈值或证据不足不算通过"
+    huh "G2=${G2_STATE}, target=${G2_TARGET}; no ratified threshold or not enough evidence is not a pass"
   fi
 fi
 
-# ── A4 自愈 ──────────────────────────────────────────────────
+# -- A4 self-heal --
 echo
-echo "A4 · 自愈（失败后自己爬起来，不等人）"
-# ①执行器抑制能自动到期  ②失败任务会被重试（fails 计数在涨说明有重投）
+echo "A4 | self-heal (it gets back up after failure, without waiting for a human)"
+# (1) executor suppression expires on its own  (2) failed tasks are retried (a rising fails count means a re-queue)
 SUPP=$(timeout 120 python3 bin/cortex-loop model 2>&1)
-if echo "$SUPP" | grep -q '抑制中'; then
-  if echo "$SUPP" | grep -qE '还剩 [0-9]+ 分钟'; then
-    ok "执行器抑制带自动到期（额度窗口免疫）"
+if echo "$SUPP" | grep -q 'suppressed'; then
+  if echo "$SUPP" | grep -qE '[0-9]+ minutes left'; then
+    ok "executor suppression expires on its own (quota-window immune)"
   else
-    bad "执行器被抑制但无到期时间 —— 会永久卡死"
+    bad "an executor is suppressed with no expiry -- it would stick forever"
   fi
 else
-  ok "当前无执行器被抑制"
+  ok "no executor is suppressed right now"
 fi
 LEDGERS=$(find brain-network/directions -name TASKS.md 2>/dev/null)
 RETRIED=0
@@ -99,55 +99,55 @@ for L in $LEDGERS; do
   RETRIED=$((RETRIED + n))
 done
 if [[ $RETRIED -ge 1 ]]; then
-  ok "有 $RETRIED 个任务经历过失败重投（fails>0 仍在账本里）"
+  ok "$RETRIED tasks have been retried after failure (fails>0 and still in the ledger)"
 else
-  huh "没有任务重投记录 —— 要么没失败过，要么失败即弃"
+  huh "no retry records -- either nothing failed, or a failure was abandoned"
 fi
 
-# ── A5 门没被放宽（最重要的反向判据）────────────────────────
+# -- A5 the gate was not loosened (the most important inverse criterion) --
 echo
-echo "A5 · 完成门未被放宽（反测哨兵必须仍是红的）"
-# T3 是故意埋的「永远缺 artifact」任务。它一旦变绿 = 有人把门放松了。
+echo "A5 | completion gate was not loosened (the negative sentinel must stay red)"
+# T3 is a task buried on purpose that is forever missing its artifact. If it turns green, someone loosened the gate.
 SENT=$(grep -E '^\| T3 \|' brain-network/directions/loop-ops/TASKS.md 2>/dev/null \
        | awk -F'|' '{gsub(/ /,"",$4); print $4}')
 case "${SENT:-missing}" in
-  # 注意 ${SENT} 必须带花括号：紧跟中文全角括号时 bash 会把它并进变量名
-  blocked|pending|failed) ok "反测哨兵 T3 = ${SENT}（门没被放宽）" ;;
-  done)                   bad "反测哨兵 T3 = done —— **门被放宽了**，系统失去可信度" ;;
-  *)                      huh "找不到反测哨兵 T3（判据本身丢了）" ;;
+  # ${SENT} must keep the braces: a following parenthesis would otherwise be parsed into the name
+  blocked|pending|failed) ok "negative sentinel T3 = ${SENT} (the gate was not loosened)" ;;
+  done)                   bad "negative sentinel T3 = done -- **the gate was loosened**, and the system is no longer trustworthy" ;;
+  *)                      huh "negative sentinel T3 was not found (the criterion itself is missing)" ;;
 esac
 
-# ── A6 无人值守 ──────────────────────────────────────────────
+# -- A6 unattended --
 echo
-echo "A6 · 无人值守（人不在也在推进）"
+echo "A6 | unattended (it keeps moving when nobody is here)"
 if launchctl print "gui/$(id -u)/${CORTEX_LAUNCHD_LABEL:-com.cortex.loop}" >/dev/null 2>&1; then
-  ok "主时钟已装载（launchd）"
+  ok "main clock is loaded (launchd)"
 else
-  bad "主时钟没装载 —— 只能靠人开会话才推进"
+  bad "main clock is not loaded -- it only moves when a human opens a session"
 fi
 BEAT="$HOME/.openclaw/state/cortex-loop.launchd.log"
 if [[ -f "$BEAT" ]]; then
   AGE=$(( ($(date +%s) - $(stat -f %m "$BEAT")) / 60 ))
-  # 阈值 30 分钟 = 15 分钟间隔的两倍，留一次容错
-  if [[ $AGE -le 30 ]]; then ok "上次心跳 ${AGE} 分钟前"
-  else                       bad "上次心跳 ${AGE} 分钟前 —— 心跳停了"
+  # Threshold 30 minutes = twice the 15 minute interval, leaving room for one miss
+  if [[ $AGE -le 30 ]]; then ok "last heartbeat ${AGE} minutes ago"
+  else                       bad "last heartbeat ${AGE} minutes ago -- the heartbeat stopped"
   fi
 else
-  huh "找不到心跳日志（无法判定活性）"
+  huh "heartbeat log not found (cannot judge liveness)"
 fi
 
-# ── 判决 ─────────────────────────────────────────────────────
+# -- verdict --
 echo
 echo "════════════════════════════════════════════════════════"
-echo "PASS $PASS · FAIL $FAIL · 无法判定 $UNKNOWN"
+echo "PASS $PASS | FAIL $FAIL | cannot judge $UNKNOWN"
 if [[ $FAIL -gt 0 ]]; then
-  echo "判决：**未达标** —— 上面每个 ❌ 都是没做到的具体项"
+  echo "verdict: **missed the bar** -- each ❌ above is a concrete miss"
   exit 1
 fi
 if [[ $UNKNOWN -gt 0 ]]; then
-  # 判不出来不等于通过 —— fail-closed 不是 fail-open
-  echo "判决：**未达标** —— 有 $UNKNOWN 项判不出来，样本不足不算过"
+  # Unable to judge is not a pass -- fail-closed, not fail-open
+  echo "verdict: **missed the bar** -- $UNKNOWN items cannot be judged, and a thin sample is not a pass"
   exit 1
 fi
-echo "判决：达标"
+echo "verdict: met the bar"
 exit 0

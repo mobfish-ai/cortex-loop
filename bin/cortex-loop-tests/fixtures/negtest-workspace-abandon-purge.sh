@@ -21,8 +21,8 @@ git -C "$repo" config user.email fixture@example.invalid
 git -C "$repo" config core.fsmonitor false
 printf 'alpha\n' > "$repo/a.txt"
 printf 'beta\n' > "$repo/b.txt"
-# §6.2 gate（attempt 必须物化 versioned hooks dir，否则 create fail-closed）落地晚于本
-# fixture → 夹具此前长期跑不起来（2026-10-11 实测 HEAD 版本同样 fail）。种子化修复。
+# The section 6.2 gate (an attempt must materialize a versioned hooks dir, or create fails closed)
+# landed after this fixture, so the fixture stayed red for a long time (HEAD failed the same way on 2026-10-11). Seeded fix.
 mkdir -p "$repo/work-studio/devops/dotfiles/git-hooks"
 printf '#!/bin/sh\nexit 0\n' > "$repo/work-studio/devops/dotfiles/git-hooks/pre-commit"
 chmod +x "$repo/work-studio/devops/dotfiles/git-hooks/pre-commit"
@@ -44,7 +44,7 @@ assert_ok() {
   if "$@"; then echo "PASS $label"; pass=$((pass+1))
   else echo "FAIL $label" >&2; fail=$((fail+1)); fi
 }
-assert_fail() {  # 断言目标命令必须失败（负例：ref 应已不存在等）
+assert_fail() {  # assert the target command must fail (negative: the ref should already be gone, and similar)
   local label="$1"; shift
   if "$@"; then echo "FAIL $label" >&2; fail=$((fail+1))
   else echo "PASS $label"; pass=$((pass+1)); fi
@@ -84,7 +84,7 @@ wc="$workspaces/no-purge"
 assert_ok "no-purge keeps worktree on disk" test -d "$wc"
 assert_ok "no-purge marks abandoned" test "$(jq -r .state "$workspaces/.state/no-purge.json")" = abandoned
 
-# --- (c) 2026-10-11: abandoned 态可被 --purge 补完（此前无任何入口，只能人工 rm） ---
+# --- (c) 2026-10-11: an abandoned state can be finished with --purge (there was no entry point; only a manual rm) ---
 printf 'resume-marker-CCC\n' >> "$wc/a.txt"
 set +e
 err_z="$("$BROKER" abandon --attempt no-purge --reason again 2>&1)"
@@ -101,10 +101,10 @@ assert_fail "abandoned --purge deletes branch" \
   git -C "$repo" show-ref --verify --quiet refs/heads/cortex/attempt/no-purge
 assert_ok "abandoned --purge output purged=1" grep -q 'purged=1' <<<"$out_z"
 
-# --- (d) 2026-10-11 独立审计 P0：含 NUL 的二进制未跟踪内容必须**真的**进补丁 ---
-# 旧门靠 `awk 'NF{print;exit}'` 取样本，遇 NUL 截断成前缀（本例截成 "nul"），该前缀命中
-# diff 头部的 /dev/null → 门误判通过、worktree 被删、内容不可恢复（审计实测 rc=0 丢内容）。
-# 新门 = `git diff --binary` + 重放证明：内容必须能从补丁逐字节还原。
+# --- (d) Independent audit P0, 2026-10-11: untracked binary content that contains NUL must really enter the patch ---
+# The old gate sampled with `awk 'NF{print;exit}'`, which truncates at NUL to a prefix (here "nul"). That prefix
+# hits /dev/null in the diff header -> the gate falsely passes, the worktree is deleted, and the content is unrecoverable (audit saw rc=0 and lost bytes).
+# The new gate is `git diff --binary` plus a replay proof: the content must be restored from the patch byte for byte.
 "$BROKER" create --attempt purge-binary --base "$base" --allow a.txt >/dev/null
 wbin="$workspaces/purge-binary"
 printf 'nul\0body-tail-UNIQUE\n' > "$wbin/f.bin"
@@ -112,14 +112,14 @@ cp "$wbin/f.bin" "$TMP/f.bin.orig"
 out_bin="$("$BROKER" abandon --attempt purge-binary --reason test-binary --purge --discard-unique 2>&1)"
 assert_ok "binary purge removes worktree" test ! -e "$wbin"
 assert_ok "binary patch carries git binary payload" grep -q 'GIT binary patch' "$patches/purge-binary.patch"
-# 独立还原（不经本工具的门）：直接用 git apply 把补丁打到 base 检出再逐字节比对
+# Independent restore (not through this tool's gate): git apply the patch onto a base checkout and compare byte for byte
 scratch="$TMP/apply-check"
 git -C "$repo" worktree add --quiet --detach "$scratch" "$base"
 git -C "$scratch" apply --binary "$patches/purge-binary.patch" 2>/dev/null || true
 assert_ok "binary content recoverable byte-exact from patch" cmp -s "$TMP/f.bin.orig" "$scratch/f.bin"
 
-# --- (e) 审计 P2：worktree 带外消失后仍能补完；分支是否删仍由同一判据决定 ---
-mk_absent() {  # $1=attempt  $2=marker：造"已提交(唯一内容) + worktree 带外删除"的形态
+# --- (e) Audit P2: completion still works after the worktree disappears out of band; whether the branch is deleted is still the same criterion ---
+mk_absent() {  # $1=attempt  $2=marker: build "committed (unique content) + worktree deleted out of band"
   "$BROKER" create --attempt "$1" --base "$base" --allow a.txt >/dev/null
   local w="$workspaces/$1"
   printf '%s\n' "$2" >> "$w/a.txt"
@@ -140,13 +140,13 @@ assert_ok "absent-worktree + --discard-unique reports purged" grep -q 'purged=1'
 assert_fail "absent-worktree + --discard-unique removes branch" \
   git -C "$repo" show-ref --verify --quiet refs/heads/cortex/attempt/purge-absent-drop
 
-# --- (f) 2026-10-12 工具层根治：全 D 型（worktree 文件整体丢失）→ 落指针清单，不抄全量 ---
-# 现状：一个 4.0G 补丁其实就是「仓库自身内容」的副本（53,268 个纯删除块），
-# 压缩/上传都不可行。指针清单（路径 + pre-image blob + size）几十 KB 即可等价保住，
-# 且**可还原**——本用例的还原断言就是"安全网没漏"的证明。
+# --- (f) 2026-10-12 tool-level fix: an all-D diff (tracked worktree files gone) writes a pointer list, not a full copy ---
+# Today a 4.0G patch is just a copy of the repo's own content (53,268 pure-deletion hunks),
+# and neither compression nor upload is feasible. A pointer list (path + pre-image blob + size) of a few dozen KB preserves the same information,
+# and it is restorable -- this case's restore assertion is the proof that the safety net did not leak.
 "$BROKER" create --attempt purge-alld --base "$base" --allow a.txt --allow b.txt >/dev/null
 wl="$workspaces/purge-alld"
-rm -f "$wl/a.txt" "$wl/b.txt"          # 模拟烂尾检出：已跟踪文件从磁盘消失
+rm -f "$wl/a.txt" "$wl/b.txt"          # simulate a broken checkout: tracked files vanished from disk
 assert_ok "all-D precondition (tracked files missing)" test ! -f "$wl/a.txt"
 out_alld="$("$BROKER" abandon --attempt purge-alld --reason test-alld --purge 2>&1)"
 assert_ok "all-D purge completes" grep -q 'purged=1' <<<"$out_alld"
@@ -158,7 +158,7 @@ dest_alld="$TMP/restore-alld"
 assert_ok "restore reproduces a.txt byte-exact" cmp -s <(git -C "$repo" show "$base:a.txt") "$dest_alld/a.txt"
 assert_ok "restore reproduces b.txt byte-exact" cmp -s <(git -C "$repo" show "$base:b.txt") "$dest_alld/b.txt"
 
-# 反例：含新增内容的补丁绝不能指针化（否则真会丢字节）
+# Counterexample: a patch that contains new content must never be pointerized (that would really drop bytes)
 ww="$TMP/nonpointer"
 "$BROKER" create --attempt purge-mixed --base "$base" --allow a.txt >/dev/null
 wm="$workspaces/purge-mixed"

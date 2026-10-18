@@ -1,32 +1,32 @@
 #!/usr/bin/env bash
 # bin/cortex-loop-adapters/_openai_compat_lib.sh
 #
-# 共享库 —— 不是 adapter，没有 $1/$2 顶层入口，只能被 source。
-# 供 minimax.sh / glm.sh 复用：两者的 provider 都在 openclaw.json 里声明
-# api="openai-completions"，也就是标准 OpenAI 兼容 /chat/completions，
-# 请求体构造 / HTTP 调用 / 状态码分类 / 响应解析这段逻辑逐字节相同——
-# 第二次手搓就该成工具（ATOMIZE 律），所以只写一份，两个 provider adapter 共用。
+# Shared library -- not an adapter. No $1/$2 top-level entry; it can only be sourced.
+# Shared by minimax.sh / glm.sh: both providers declare in openclaw.json
+# api="openai-completions", i.e. standard OpenAI-compatible /chat/completions.
+# Body construction / HTTP call / status classification / response parsing are byte-for-byte the same --
+# the second hand-roll should become a tool (ATOMIZE), so one copy is shared by both provider adapters.
 #
-# 提供的函数（source 后即可用，均不打印明文 key）：
-#   oc_key_hash <key>                                          → stdout: 12 位 sha256 前缀
+# Functions provided (usable after source; none print a raw key):
+#   oc_key_hash <key>                                          → stdout: 12-char sha256 prefix
 #   oc_ordered_keys <providers_csv> <extra_env_name> <state_file> <cooldown_sec>
-#                                                               → stdout: label\tbase_url\tkey\thash（每行一条，就绪的排前面，冷却中的排后面）
+#                                                               → stdout: label\tbase_url\tkey\thash (one row each; ready keys first, cooling keys last)
 #   oc_call <base_url> <api_key> <model> <prompt_file> <result_file> <timeout_sec>
-#                                                               → rc=0 成功(结果写入 result_file)；非 0 见 OC_ERROR_KIND
-#   oc_mark_success <state_file> <hash>                        → 清空该 key 的失败记录
-#   oc_mark_failure <state_file> <hash> <label>                → 记录该 key 本次失败时间
+#                                                               → rc=0 success (result written to result_file); non-zero: see OC_ERROR_KIND
+#   oc_mark_success <state_file> <hash>                        → clear this key's failure record
+#   oc_mark_failure <state_file> <hash> <label>                → record this key's failure time
 #
-# 安全约束：任何函数都不把 api_key 明文写进 result_file / state_file / stdout /
-# stderr —— state_file 只存 sha256 前缀(hash) + label(如 "minimax#1"，不含 key 本身)。
+# Safety: no function writes the raw api_key into result_file / state_file / stdout /
+# stderr -- state_file stores only the sha256 prefix (hash) + label (e.g. "minimax#1", not the key itself).
 
 oc_key_hash() {
     printf '%s' "$1" | shasum -a 256 2>/dev/null | cut -c1-12
 }
 
 # oc_ordered_keys <providers_csv> <extra_env_name> <state_file> <cooldown_sec>
-# providers_csv：openclaw.json models.providers 下的条目名，逗号分隔（如 "minimax,minimax-cn"）
-# extra_env_name：额外 key 的 env 变量名（如 "MINIMAX_API_KEYS"，逗号分隔，套用第一个 provider 的 base_url）
-# 读取顺序：每个 provider 的 apiKey（单个，向后兼容）+ apiKeys[]（数组，新约定，供多账号）
+# providers_csv: entry names under openclaw.json models.providers, comma-separated (e.g. "minimax,minimax-cn")
+# extra_env_name: env var for extra keys (e.g. "MINIMAX_API_KEYS", comma-separated, using the first provider's base_url)
+# Read order: each provider's apiKey (single, backward compatible) + apiKeys[] (array, new convention, for multiple accounts)
 oc_ordered_keys() {
     local providers_csv="$1" extra_env_name="$2" state_file="$3" cooldown="$4"
     local extra_val="${!extra_env_name:-}"
@@ -75,7 +75,7 @@ for pname in [p.strip() for p in providers_csv.split(",") if p.strip()]:
     for i, k in enumerate(keys, start=1):
         rows.append((f"{pname}#{i}", base_url, k))
 
-# env 里追加的 key（临时/快速补位用；正式多账号建议写进 openclaw.json 的 apiKeys[]）
+# Extra keys from the env (temporary / quick fill-in; real multi-account keys belong in openclaw.json apiKeys[])
 if extra_keys.strip() and first_base_url:
     for i, k in enumerate([x.strip() for x in extra_keys.split(",") if x.strip()], start=1):
         rows.append((f"env#{i}", first_base_url, k))
@@ -97,7 +97,7 @@ for label, base_url, key in rows:
     else:
         ready.append(row_out)
 
-# 就绪的优先；若全部都在冷却中，仍然全部给出（宁可撞冷却重试，不可无 key 可用）
+# Ready keys first; if every key is cooling, still return all of them (better to retry through cooldown than to have no key)
 for r in ready + cooling:
     print(r)
 PYEOF
@@ -128,7 +128,7 @@ with open(body_file, "w", encoding="utf-8") as f:
 PYEOF
     if [[ ! -s "$body_file" ]]; then
         OC_ERROR_KIND="build_body"
-        echo "[oc_call] 请求体构造失败（prompt 文件读不到？）" > "$result_file"
+        echo "[oc_call] failed to build request body (prompt file unreadable?)" > "$result_file"
         rm -f "$body_file" "$resp_file" "$err_file"
         return 90
     fi
@@ -144,7 +144,7 @@ PYEOF
 
     if [[ $curl_rc -ne 0 ]]; then
         OC_ERROR_KIND="network"
-        { echo "[oc_call] curl 网络失败 curl_rc=$curl_rc"; cat "$err_file" 2>/dev/null; } > "$result_file"
+        { echo "[oc_call] curl network failure curl_rc=$curl_rc"; cat "$err_file" 2>/dev/null; } > "$result_file"
         rm -f "$resp_file" "$err_file"
         return 91
     fi
@@ -172,32 +172,32 @@ PYEOF
                 return 0
             else
                 OC_ERROR_KIND="empty"
-                { echo "[oc_call] HTTP 200 但响应体解析失败/content 为空（前 500 字节）："; head -c 500 "$resp_file"; } > "$result_file"
+                { echo "[oc_call] HTTP 200 but response parse failed or content is empty (first 500 bytes):"; head -c 500 "$resp_file"; } > "$result_file"
                 rm -f "$resp_file"
                 return 92
             fi
             ;;
         401|403)
             OC_ERROR_KIND="auth"
-            { echo "[oc_call] HTTP $http_code 鉴权失败（key 失效/额度耗尽）（前 500 字节）："; head -c 500 "$resp_file"; } > "$result_file"
+            { echo "[oc_call] HTTP $http_code auth failure (key invalid or quota exhausted) (first 500 bytes):"; head -c 500 "$resp_file"; } > "$result_file"
             rm -f "$resp_file"
             return 93
             ;;
         429)
             OC_ERROR_KIND="rate_limit"
-            { echo "[oc_call] HTTP 429 限流/额度耗尽（前 500 字节）："; head -c 500 "$resp_file"; } > "$result_file"
+            { echo "[oc_call] HTTP 429 rate limit or quota exhausted (first 500 bytes):"; head -c 500 "$resp_file"; } > "$result_file"
             rm -f "$resp_file"
             return 94
             ;;
         5*)
             OC_ERROR_KIND="server"
-            { echo "[oc_call] HTTP $http_code 服务端错误（前 500 字节）："; head -c 500 "$resp_file"; } > "$result_file"
+            { echo "[oc_call] HTTP $http_code server error (first 500 bytes):"; head -c 500 "$resp_file"; } > "$result_file"
             rm -f "$resp_file"
             return 95
             ;;
         *)
             OC_ERROR_KIND="other"
-            { echo "[oc_call] HTTP $http_code 未分类错误（前 500 字节）："; head -c 500 "$resp_file"; } > "$result_file"
+            { echo "[oc_call] HTTP $http_code unclassified error (first 500 bytes):"; head -c 500 "$resp_file"; } > "$result_file"
             rm -f "$resp_file"
             return 96
             ;;
@@ -205,15 +205,15 @@ PYEOF
 }
 
 # oc_ordered_ccswitch_accounts <name_like_pattern> <state_file> <cooldown_sec>
-# 从 CC Switch 桌面工具的本地 SQLite(~/.cc-switch/cc-switch.db)里直接取
-# Anthropic-兼容端点账号(base_url/model/token 三元组，走 claude CLI 的 provider
-# 是这个 schema，不是 openclaw.json 的 OpenAI-兼容 schema)。
+# Read Anthropic-compatible endpoint accounts straight from the CC Switch desktop tool's
+# local SQLite (~/.cc-switch/cc-switch.db): the base_url/model/token triple. The provider
+# that the claude CLI uses is this schema, not openclaw.json's OpenAI-compatible schema.
 #
-# 为什么不走 ~/.claude/settings.json：那个文件只有人在 CC Switch GUI 里点了
-# "启用"才会被写入 —— 无人值守的心跳每 2 分钟跑一次，没人会替它点按钮。
-# 2026-07-31 实测：settings.json 当时指向 "Claude Official"，cheap.sh 却传了
-# 一个真官方端点不认识的模型名，adapter FAIL rc=1 是必然结果，不是偶发。
-# 直接读 SQLite（只读查询，不碰 GUI 状态/is_current 字段）绕开这个人工依赖。
+# Why not ~/.claude/settings.json: that file is written only after a human clicks
+# Enable in the CC Switch GUI -- the unattended heartbeat runs every 2 minutes, and nobody clicks for it.
+# Observed 2026-07-31: settings.json pointed at "Claude Official" while cheap.sh sent
+# a model name the real official endpoint does not know, so adapter FAIL rc=1 was certain, not a flake.
+# Reading SQLite directly (read-only query; do not touch GUI state / is_current) removes that human dependency.
 oc_ordered_ccswitch_accounts() {
     local name_pattern="$1" state_file="$2" cooldown="$3"
     local db="$HOME/.cc-switch/cc-switch.db"
