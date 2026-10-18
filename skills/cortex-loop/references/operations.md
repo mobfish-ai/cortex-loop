@@ -1,120 +1,122 @@
-# cortex-loop 运维手册（新增线 / 时钟部署 / 完整命令表 / 共栖索引）
+English | [简体中文](operations.zh-CN.md)
 
-> **何时该读**：要新开一条方向线、要装或核对三个时钟、要一份完整命令 cheatsheet、
-> 或要找「这套东西还有哪些相关文档」。
-> **上级**：[[cortex-loop/SKILL|SKILL.md]]
+# cortex-loop operations manual (new line / clock deploy / full command table / cohabitation index)
+
+> **When to read this**: you are opening a new direction line, installing or checking the three clocks, you want a full command cheatsheet,
+> or you are looking for "what other documents belong to this system".
+> **Parent**: [[cortex-loop/SKILL|SKILL.md]]
 
 ---
 
-## 新增一条方向线（SOP）
+## Open a new direction line (SOP)
 
 1. `mkdir brain-network/directions/<line>/`
-2. 写 `INTENT.md` —— frontmatter 必含 `line · status · created · updated · claim · success_criteria · out_of_scope · related`，正文七问段 `Why / Done / Proof / Anti / Bounds / Trade / Unknown`
-3. 在 [[CLOCK]] 加一行：**`executor` 一律先写 `human`**（安全默认，先投递不执行）
-4. `bin/cortex-loop decompose --line <line>` → 看 `TASKS.proposed.md` 对不对 → `--apply` 并入
-5. `bin/cortex-loop reconcile` 确认 DRIFT=0
-6. 跑几轮 human 看着对了，再把 `executor` 改成 `claude` / `codex` / `cheap`
-7. **L2 headless（acp-lane）**：整线写 `CLOCK.executor=acp-lane`；或单任务 `requires_executor=acp-lane`（优先于线默认）。终端直跑：`bash bin/acp-policy-client.sh run --topic T --backend grok --cwd /tmp/xxx --prompt "…"`。禁止 cwd=vault 根。验收：`bash bin/verify-acp-l2-grok-mvp.sh`
+2. Write `INTENT.md` — frontmatter must contain `line · status · created · updated · claim · success_criteria · out_of_scope · related`, and the body has the seven sections `Why / Done / Proof / Anti / Bounds / Trade / Unknown`
+3. Add a row to [[CLOCK]]: **`executor` is always `human` first** (safe default; deliver, do not execute)
+4. `bin/cortex-loop decompose --line <line>` → check that `TASKS.proposed.md` is right → `--apply` to merge
+5. `bin/cortex-loop reconcile` and confirm DRIFT=0
+6. Run a few human rounds until it looks right, then change `executor` to `claude` / `codex` / `cheap`
+7. **L2 headless (acp-lane)**: write `CLOCK.executor=acp-lane` for the whole line, or `requires_executor=acp-lane` on a single task (it wins over the line default). Run it straight from a terminal: `bash bin/acp-policy-client.sh run --topic T --backend grok --cwd /tmp/xxx --prompt "…"`. cwd=vault root is forbidden. Acceptance: `bash bin/verify-acp-l2-grok-mvp.sh`
 
-字段硬规矩见 [[cortex-loop/references/contracts|contracts.md]]。
+Hard field rules are in [[cortex-loop/references/contracts|contracts.md]].
 
 ---
 
-## 三个时钟（launchd · 职责正交）
+## Three clocks (launchd · duties are orthogonal)
 
-| 时钟 | 周期 | 干什么 | plist |
+| Clock | Period | What it does | plist |
 |------|------|--------|-------|
-| `com.cortex.loop` | **900s** | **推进**任务（做事） | `work-studio/devops/dotfiles/launchd/com.cortex.loop.plist` |
-| `com.cortex.pulse` | **3600s** | **体检**健康趋势（P·U·L·S·E 五问） | `…/com.cortex.pulse.plist` |
-| `com.cortex.ci` | **每天 09:30** | **约束**不跑偏（全套测试 + 目标锚定） | `…/com.cortex.ci.plist` |
+| `com.cortex.loop` | **900s** | **advances** tasks (does the work) | `work-studio/devops/dotfiles/launchd/com.cortex.loop.plist` |
+| `com.cortex.pulse` | **3600s** | **checks** the health trend (the five P·U·L·S·E questions) | `…/com.cortex.pulse.plist` |
+| `com.cortex.ci` | **every day at 09:30** | **constrains** drift (full test suite + goal anchor) | `…/com.cortex.ci.plist` |
 
-**核对时钟实况**：`bash bin/cortex-trace.sh clocks` · `bin/cortex-loop reconcile`（声明 vs 实际，脱钩报 DRIFT）
-选点与 LATCH 依据见 [[cortex-loop/references/architecture|architecture.md]] §五工具为什么正交。
+**Check the live clocks**: `bash bin/cortex-trace.sh clocks` · `bin/cortex-loop reconcile` (declaration vs reality; a split reports DRIFT)
+The chosen time and the LATCH basis are in [[cortex-loop/references/architecture|architecture.md]] §why the five tools are orthogonal.
 
 ---
 
-## 完整命令 cheatsheet
+## Full command cheatsheet
 
 ```bash
-# ── 心跳与账本 ──────────────────────────────
-bin/cortex-loop tick                                     # 看什么到期（不推进）
-bin/cortex-loop tick --auto                              # 真推进（launchd 每 900s 跑这个）
-bin/cortex-loop next --line loop-ops --claim             # 拿提示词 + 占坑
+# ── heartbeat and ledger ──────────────────────────────
+bin/cortex-loop tick                                     # see what is due (does not advance)
+bin/cortex-loop tick --auto                              # actually advance (launchd runs this every 900s)
+bin/cortex-loop next --line loop-ops --claim             # take the prompt + take the slot
 bin/cortex-loop submit --line loop-ops --task T2 --result /tmp/r.txt
-bin/cortex-loop try-complete --line loop-ops --task T2   # 唯一能写 done
+bin/cortex-loop try-complete --line loop-ops --task T2   # the only command that can write done
 bin/cortex-loop status
-bin/cortex-loop idle                                     # 闲置率诚实口径（分母不含睡眠拍）
+bin/cortex-loop idle                                     # honest idle rate (the denominator excludes sleep ticks)
 
-# ── 自检与对账 ──────────────────────────────
+# ── self-check and reconcile ──────────────────────────────
 bin/cortex-loop health
 bin/cortex-loop reconcile
-bin/cortex-loop why                                      # 信任凭什么这么判
-bin/cortex-loop value                                    # V1/V2/V3 + 杠杆率
+bin/cortex-loop why                                      # why trust was judged this way
+bin/cortex-loop value                                    # V1/V2/V3 + leverage
 
-# ── 蜂群 ────────────────────────────────────
-bin/cortex-loop swarm                                    # 谁在线、哪条线没人管
-bin/cortex-loop sync                                     # ref 层心跳（不碰工作区）
-bin/cortex-loop caps                                     # 能力矩阵 + 单点能力告警
+# ── swarm ────────────────────────────────────
+bin/cortex-loop swarm                                    # who is online, which line has no owner
+bin/cortex-loop sync                                     # ref-layer heartbeat (does not touch the worktree)
+bin/cortex-loop caps                                     # capability matrix + single-point capability alert
 bin/cortex-loop lease --line loop-ops
-bin/cortex-loop checkin        /  checkin --out          # 主线程接入 / 退出
+bin/cortex-loop checkin        /  checkin --out          # main thread joins / leaves
 
-# ── 去中心化分发 ────────────────────────────
+# ── decentralized dispatch ────────────────────────────
 bin/cortex-loop discover --publish
 bin/cortex-loop plan  /  claim  /  run  /  result  /  gather --settle
 
-# ── 信任与约束 ──────────────────────────────
+# ── trust and constraint ──────────────────────────────
 bin/cortex-loop trust
 bin/cortex-loop attest --executor claude
 bin/cortex-loop fault  /  credit
-bin/cortex-loop readjudicate                             # 判据改严后重判历史 rejected
+bin/cortex-loop readjudicate                             # rejudge historical rejected after the criterion is tightened
 bin/cortex-loop model
 
-# ── 五工具（先查工具，别手搓）────────────────
-bash bin/cortex-probe.sh list              # 10 个探针，三态 YES/NO/UNKNOWN
-bash bin/cortex-trace.sh wiring            # 内部接线图：发现→排序→认领→准入→执行→完成门
-bash bin/cortex-trace.sh task <id>         # 一个任务的完整生命周期
-bash bin/cortex-trace.sh state / clocks / chain ci / history [天]
-bash bin/cortex-dashboard.sh               # 一屏总览（--json 机读 / --watch 常驻 / --md 写 living md）
-bash bin/cortex-pulse.sh                   # 周期体检（退出码 2 = 比上次退化）
-bash bin/cortex-ci.sh                      # 每日约束（退出码 2 = 目标被改松）
+# ── five tools (look up the tool first; do not hand-roll) ────────────────
+bash bin/cortex-probe.sh list              # 10 probes, three-state YES/NO/UNKNOWN
+bash bin/cortex-trace.sh wiring            # internal wiring: discover→rank→claim→admit→execute→completion gate
+bash bin/cortex-trace.sh task <id>         # one task's full lifecycle
+bash bin/cortex-trace.sh state / clocks / chain ci / history [days]
+bash bin/cortex-dashboard.sh               # one-screen overview (--json machine-readable / --watch resident / --md writes a living md)
+bash bin/cortex-pulse.sh                   # periodic checkup (exit code 2 = regressed since last time)
+bash bin/cortex-ci.sh                      # daily constraint (exit code 2 = a goal was loosened)
 
-# ── 测试 ────────────────────────────────────
+# ── tests ────────────────────────────────────
 bash bin/cortex-loop-tests/env-parity.sh
-bash bin/cortex-loop-tests/suite.sh                      # 36 PASS / 0 FAIL / 1 SKIP（2026-07-29 实跑）
-bash bin/cortex-loop-tests/autonomy-acceptance.sh        # A1-A6 自主闭环验收
-bash bin/cortex-loop-tests/dimensional-collapse-scan.sh  # 维度坍缩扫描（T7 机械后盾）
+bash bin/cortex-loop-tests/suite.sh                      # 36 PASS / 0 FAIL / 1 SKIP (live run 2026-07-29)
+bash bin/cortex-loop-tests/autonomy-acceptance.sh        # A1-A6 autonomous closed-loop acceptance
+bash bin/cortex-loop-tests/dimensional-collapse-scan.sh  # dimensional-collapse scan (T7 mechanical backing)
 
-# ── 长跑任务脱离终端（会话崩了不连坐 · E010）──
-bin/cortex-loop-detach.sh <名字> "<命令>"
-bin/cortex-loop-detach.sh --status <名字>   /  --wait  /  --list
+# ── detach a long run from the terminal (a session crash does not take it down · E010) ──
+bin/cortex-loop-detach.sh <name> "<command>"
+bin/cortex-loop-detach.sh --status <name>   /  --wait  /  --list
 
-# ── 合同门 ──────────────────────────────────
+# ── contract gate ──────────────────────────────────
 python3 bin/knowledge-contract-gate.py check-path brain-network/directions/CLOCK.md --strict
 python3 bin/knowledge-contract-gate.py check-path skills/cortex-loop/SKILL.md
 ```
 
 ---
 
-## 关联文档（共栖索引）
+## Related documents (cohabitation index)
 
-| 类型 | 路径 | 说明 |
+| Kind | Path | Note |
 |------|------|------|
-| **总纲报告** | [[cortex-loop-intent]] | canonical reading entry：意图 / 三分 / SHIFT / 红→绿实测 7 项 |
-| **蜂群总纲** | [[brain-network/directions/loop-ops/CHARTER-SWARM\|CHARTER-SWARM]] | 目标 G1–G6 / 范围 / out_of_scope；**ci 拿它核对目标没被改松** |
-| **期待清单** | [[cortex-loop/EXPECTATIONS\|EXPECTATIONS.md]] | 要做但一直还没做到的（机读 `--json`） |
-| 试点线产出 | [[cortex-loop-cron-error-triage]] | loop-ops T1：10 条 error job 五类根因 |
-| 引擎 | `bin/cortex-loop` | python3，零 LLM（07-28 收盘 1093 行 → 07-29 4125 行） |
-| 肌肉 | `bin/cortex-loop-adapters/{human,claude,codex,ollama,mock}.sh` | 唯一调 LLM 的通道 |
-| 五工具 | `bin/cortex-{probe,trace,dashboard,pulse,ci}.sh` | 见 SKILL.md §工具箱 |
-| 辅助 | `bin/cortex-loop-detach.sh` · `bin/cortex-loop-mcp.py` | tmux 脱离终端 · MCP 出口 |
-| 三时钟 | `work-studio/devops/dotfiles/launchd/com.cortex.cortex-{loop,pulse,ci}.plist` | 900s / 3600s / 每天 09:30 |
-| 测试 | `bin/cortex-loop-tests/suite.sh` + `fixtures/negtest-*.py` | 8 个负向测试，每个经破坏性验证「真的会红」 |
-| 调度声明 | [[CLOCK]] | 改这张表 = 改调度 |
-| 试点线 | [[brain-network/directions/loop-ops/INTENT\|loop-ops INTENT]] · [[brain-network/directions/loop-ops/INTENT-P2\|INTENT-P2]] · [[brain-network/directions/loop-ops/TASKS\|TASKS]] | 环修自己的地基 |
-| 合同注册 | [[knowledge-contract-registry]] §4.12 / §4.12a | 见 [[cortex-loop/references/contracts\|contracts.md]] |
-| 协作定律 | [[mobfish-six-laws]] | C1/C2/C3 三关 + V1/V2/V3 价值三律的真相源 |
-| 错题本 | [[cortex-loop/ERRORS\|ERRORS.md]] | E001–E015，含「静默降级比报错更危险」 |
-| 建设日记 | [[cortex-loop/JOURNAL\|JOURNAL.md]] | 07-28 从 0 到双端蜂群 · 07-29 从蜂群到自主闭环 |
+| **Charter report** | [[cortex-loop-intent]] | canonical reading entry: intent / three parts / SHIFT / 7 red→green live checks |
+| **Swarm charter** | [[brain-network/directions/loop-ops/CHARTER-SWARM\|CHARTER-SWARM]] | goals G1–G6 / scope / out_of_scope; **ci uses it to check that goals were not loosened** |
+| **Expectations list** | [[cortex-loop/EXPECTATIONS\|EXPECTATIONS.md]] | should be done and still is not (machine-readable `--json`) |
+| Pilot-line output | [[cortex-loop-cron-error-triage]] | loop-ops T1: 10 error jobs, five root-cause classes |
+| Engine | `bin/cortex-loop` | python3, zero LLM (1093 lines at the 07-28 close → 4125 lines on 07-29) |
+| Muscle | `bin/cortex-loop-adapters/{human,claude,codex,ollama,mock}.sh` | the only channel that calls an LLM |
+| Five tools | `bin/cortex-{probe,trace,dashboard,pulse,ci}.sh` | see SKILL.md §toolbox |
+| Helpers | `bin/cortex-loop-detach.sh` · `bin/cortex-loop-mcp.py` | detach from the terminal with tmux · MCP exit |
+| Three clocks | `work-studio/devops/dotfiles/launchd/com.cortex.cortex-{loop,pulse,ci}.plist` | 900s / 3600s / every day at 09:30 |
+| Tests | `bin/cortex-loop-tests/suite.sh` + `fixtures/negtest-*.py` | 8 negative tests, each proved by a destructive check to "actually go red" |
+| Schedule declaration | [[CLOCK]] | changing this table changes the schedule |
+| Pilot line | [[brain-network/directions/loop-ops/INTENT\|loop-ops INTENT]] · [[brain-network/directions/loop-ops/INTENT-P2\|INTENT-P2]] · [[brain-network/directions/loop-ops/TASKS\|TASKS]] | the loop repairs its own foundation |
+| Contract registry | [[knowledge-contract-registry]] §4.12 / §4.12a | see [[cortex-loop/references/contracts\|contracts.md]] |
+| Collaboration laws | [[mobfish-six-laws]] | source of truth for the C1/C2/C3 three gates + the V1/V2/V3 three value laws |
+| Error log | [[cortex-loop/ERRORS\|ERRORS.md]] | E001–E015, including "silent degradation is more dangerous than an error" |
+| Build journal | [[cortex-loop/JOURNAL\|JOURNAL.md]] | 07-28 from zero to a two-node swarm · 07-29 from swarm to an autonomous closed loop |
 
 ---
 
@@ -125,4 +127,4 @@ python3 bin/knowledge-contract-gate.py check-path skills/cortex-loop/SKILL.md
 ---
 
 <!-- cortex:map-backlink d-6907ff16c7030089e243be51 -->
-关联地图：[[skills/cortex-loop/MAP|Cortex Loop 全景地图]]
+Related map: [[skills/cortex-loop/MAP|Cortex Loop panorama]]

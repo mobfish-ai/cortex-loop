@@ -175,8 +175,8 @@ print('ACQUIRED' if m.acquire_task_lock(line, task) else 'REJECTED')
             holder.kill()
             holder.wait(timeout=5)
 
-    # 外层 task-run 意外退出时，adapter 孙进程继承同一 flock；只要它仍在干活，
-    # 下一拍就不能把 running 当孤儿重跑。
+    # When the outer task-run exits unexpectedly, the adapter grandchild inherits the same flock;
+    # while it is still working, the next tick must not rerun a live running task as an orphan.
     child_pidfile = sandbox / "adapter-shell.pid"
     orphan_holder_code = """
 import importlib.machinery, importlib.util, shlex, sys

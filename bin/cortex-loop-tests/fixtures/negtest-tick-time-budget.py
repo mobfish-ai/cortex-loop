@@ -1,25 +1,26 @@
 #!/usr/bin/env python3
-"""负向测试：一拍的时间预算必须够跑完一个真任务，且不能长到把时钟卡死。
+"""Negative test: one tick's time budget must be long enough to finish a real task, and not so long that it jams the clock.
 
-为什么必须常驻回归（2026-07-29 真机实证）：
-  worker 的 `TimeoutStartSec=300` 被红灯挡了整整一天没人看见 ——
-  旧代码 health 恒 RED，49 秒就退出，**永远碰不到 300s 这个上限**。
-  等 health 修绿、节点第一次真的开始干活，300s 立刻变成新天花板：
+Why this must stay in the suite (live evidence, 2026-07-29):
+  The worker `TimeoutStartSec=300` sat behind a red light for a whole day and nobody saw it --
+  the old health code stayed RED and exited in 49 seconds, so it never reached the 300s ceiling.
+  Once health went green and the node actually started work, 300s became the new ceiling:
 
       22:14:02  Starting CORTEX cortex-loop tick...
       22:14:08  sync worker | ... | beat=ok
-      22:19:08  start operation timed out. Terminating.   ← 整整 300s，每拍如此
+      22:19:08  start operation timed out. Terminating.   <- a full 300s, every tick
 
-  心跳照跳（ExecStartPre 的 sync 只要 6 秒），干活的 `tick --auto` 每拍必被 SIGTERM。
-  于是节点在蜂群眼里「活着且健康」，实际产出恒为零 —— 比死了更难发现。
+  The heartbeat kept beating (ExecStartPre sync takes 6 seconds), and the working `tick --auto`
+  was SIGTERM'd every tick. The swarm saw a node that was alive and healthy, while real output
+  stayed at zero -- harder to notice than a dead node.
 
-这正是高维展开律说的坍缩：「服务失败」这一个状态里，
-  `status=1/FAILURE`（判据不让跑）和 `status=15/TERM`（跑得好好的被掐死）
-是两件完全相反的事 —— 前者要修判据，后者要给时间。压成一个「服务红了」就分不出来。
+That is the collapse the high-dimension law warns about: one "service failed" state mixes
+  `status=1/FAILURE` (the criterion refused to run) and `status=15/TERM` (a healthy run was killed).
+Those are opposite repairs -- fix the criterion, or give it time. One "service is red" cannot tell them apart.
 
-两侧都必须挡：
-  下界 —— 太短 = 真任务永远跑不完（本次实测踩到的）
-  上界 —— ≥ 时钟周期 = 一拍卡死就永久占住槽位，后面每一拍都进不来
+Both sides must be blocked:
+  floor -- too short = a real task never finishes (what this live run hit)
+  ceiling -- >= the clock period = one stuck tick holds the slot forever, and later ticks never enter
 """
 import os
 import re
@@ -30,22 +31,22 @@ _PRIVATE_UNITS = os.path.join(ROOT, "work-studio", "devops", "dotfiles", "system
 _PUBLIC_UNITS = os.path.join(ROOT, "examples", "systemd")
 UNIT_DIR = _PRIVATE_UNITS if os.path.isfile(os.path.join(_PRIVATE_UNITS, "cortex-loop.service")) else _PUBLIC_UNITS
 
-# 一次真拍的实测下界（worker 2026-07-29）：
-#   health 里 `openclaw cron list` 单条就 39s，加 git ls-remote + 扫描 ≈ 60-90s，
-#   之后才轮到真正执行任务。给真任务留不到 3.5 分钟 = 基本必被杀。
-FLOOR = 600          # 秒；低于此值 = 真任务没有合理完成机会
+# Measured floor for one real tick (worker, 2026-07-29):
+#   `openclaw cron list` inside health alone takes 39s, plus git ls-remote + scan ~ 60-90s,
+#   and only then does the real task run. Leaving a real task under 3.5 minutes means it gets killed.
+FLOOR = 600          # seconds; below this a real task has no fair chance to finish
 
 fails = 0
 
 
 def judge(timeout, period):
-    """三态而非二态：TOO_SHORT / TOO_LONG / OK。
+    """Three states, not two: TOO_SHORT / TOO_LONG / OK.
 
-    不写成 bool，因为「太短」和「太长」的修法完全相反 ——
-    压成一个 False 会让读的人不知道该往哪边调。
+    Not a bool, because "too short" and "too long" have opposite repairs --
+    one False does not tell the reader which way to turn the knob.
     """
     if timeout is None or period is None:
-        return "UNKNOWN"          # 读不到就如实说读不到，不冒充 OK
+        return "UNKNOWN"          # if it cannot be read, say so; do not pretend OK
     if timeout < FLOOR:
         return "TOO_SHORT"
     if timeout >= period:
@@ -53,32 +54,32 @@ def judge(timeout, period):
     return "OK"
 
 
-# ── 1. 判据本身必须真的会拦（负向：喂坏值必须被判坏）───────────────────
+# -- 1. The criterion itself must really block (negative: a bad value must be judged bad) --
 SCENARIOS = [
-    # (timeout, period, 期望, 说明)
-    (300,  900, "TOO_SHORT", "本次真机踩到的原值：真任务跑不完，每拍 SIGTERM"),
-    (599,  900, "TOO_SHORT", "刚好在下界之下"),
-    (600,  900, "OK",        "下界本身应放行"),
-    (840,  900, "OK",        "留 60s 余量，一拍卡死最多吃掉一拍"),
-    (900,  900, "TOO_LONG",  "等于周期：卡死就永久占槽，后面每拍都进不来"),
-    (3600, 900, "TOO_LONG",  "远超周期"),
-    (None, 900, "UNKNOWN",   "读不到就报未知，绝不倒向 OK（fail-open 最危险）"),
+    # (timeout, period, expected, note)
+    (300,  900, "TOO_SHORT", "the live original: a real task cannot finish, SIGTERM every tick"),
+    (599,  900, "TOO_SHORT", "just under the floor"),
+    (600,  900, "OK",        "the floor itself must be allowed"),
+    (840,  900, "OK",        "60s of slack; one stuck tick costs at most one tick"),
+    (900,  900, "TOO_LONG",  "equal to the period: a stuck tick holds the slot forever"),
+    (3600, 900, "TOO_LONG",  "far past the period"),
+    (None, 900, "UNKNOWN",   "unreadable stays unknown, never falls open to OK"),
 ]
 for timeout, period, want, why in SCENARIOS:
     got = judge(timeout, period)
     if got != want:
-        print("FAIL  judge(%s,%s) 期望 %s 实得 %s —— %s" % (timeout, period, want, got, why))
+        print("FAIL  judge(%s,%s) want %s got %s -- %s" % (timeout, period, want, got, why))
         fails += 1
 if not fails:
-    print("PASS  时间预算判据 %d 场景全绿（含 3 条必须被拦的坏值）" % len(SCENARIOS))
+    print("PASS  time-budget criterion: %d scenarios all green (including 3 bad values that must be blocked)" % len(SCENARIOS))
 
-# ── 2. 判据必须真能分出「被判据拦下」vs「跑着被掐死」──────────────────
-# 这两种 systemd 失败长得很像，但一个要修判据、一个要给时间，绝不能混。
+# -- 2. The criterion must separate "blocked by the criterion" from "killed while running" --
+# These two systemd failures look alike, but one needs a criterion fix and one needs time.
 JOURNAL_CASES = [
     ("Main process exited, code=exited, status=1/FAILURE", "GATED",
-     "判据不让跑（旧 health RED 那一类）"),
+     "criterion refused to run (the old health RED class)"),
     ("Main process exited, code=killed, status=15/TERM",   "KILLED",
-     "跑得好好的被超时掐死（本次这一类）"),
+     "a healthy run was killed by timeout (this incident's class)"),
 ]
 
 
@@ -93,16 +94,16 @@ def classify(line):
 for line, want, why in JOURNAL_CASES:
     got = classify(line)
     if got != want:
-        print("FAIL  classify 期望 %s 实得 %s —— %s" % (want, got, why))
+        print("FAIL  classify want %s got %s -- %s" % (want, got, why))
         fails += 1
 if not fails:
-    print("PASS  两类 systemd 失败可区分（判据拦下 vs 被掐死，修法相反）")
+    print("PASS  the two systemd failures are distinguishable (gated vs killed; opposite repairs)")
 
-# ── 3. 真文件必须过（git 追踪的真相源，不是副本）──────────────────────
+# -- 3. The real files must pass (the git-tracked source of truth, not a copy) --
 svc = os.path.join(UNIT_DIR, "cortex-loop.service")
 tmr = os.path.join(UNIT_DIR, "cortex-loop.timer")
 if not (os.path.isfile(svc) and os.path.isfile(tmr)):
-    print("FAIL  找不到 systemd 真相源：%s" % UNIT_DIR)
+    print("FAIL  systemd source of truth not found: %s" % UNIT_DIR)
     sys.exit(1)
 
 
@@ -115,11 +116,11 @@ t_out = grab(svc, "TimeoutStartSec")
 t_per = grab(tmr, "OnUnitActiveSec")
 verdict = judge(t_out, t_per)
 if verdict != "OK":
-    print("FAIL  真文件 TimeoutStartSec=%s / OnUnitActiveSec=%s → %s" % (t_out, t_per, verdict))
-    print("      下界 %ds（真任务要跑得完）· 上界 < 周期（卡死不许永久占槽）" % FLOOR)
+    print("FAIL  real file TimeoutStartSec=%s / OnUnitActiveSec=%s -> %s" % (t_out, t_per, verdict))
+    print("      floor %ds (a real task must be able to finish); ceiling < period (a stuck tick must not hold the slot)" % FLOOR)
     fails += 1
 else:
-    print("PASS  真文件时间预算合理：%ds 拍上限 < %ds 时钟周期，且 ≥ %ds 下界"
+    print("PASS  real-file time budget is sound: %ds tick cap < %ds clock period, and >= %ds floor"
           % (t_out, t_per, FLOOR))
 
 sys.exit(1 if fails else 0)

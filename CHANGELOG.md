@@ -1,7 +1,11 @@
+English | [简体中文](CHANGELOG.zh-CN.md)
+
 # Changelog
 
 ## Unreleased
 
+- English is the default for code, comments, and CLI text. User-facing docs have Simplified Chinese mirrors (`*.zh-CN.md`) with a language switch on the first line.
+- CI fails when CJK characters appear outside those mirrors and `bin/cortex-loop-tests/fixtures/`.
 - Scrub personal names, machine nicknames, and the default harness path from the tree.
 - Node nicknames and the MiniMax CN provider list are environment settings.
 - Suite skips private companion tools instead of failing, and GitHub Actions runs the suite plus a sensitive-string gate.

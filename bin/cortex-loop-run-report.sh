@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# cortex-loop-run-report — 每次跑批后自动吐「精简但可对账」报告
+# cortex-loop-run-report — after each batch, emit a short report that can be reconciled
 #
-# 铁律：数字只来自 TASKS 账本 + /tmp/spotlight 结果文件 + cortex-loop 日志。
-# 时长三口径分列，禁止混用 claim→done 当「干活速度」。
-# token 查不到必须写 UNKNOWN，禁止编造。
+# Rule: numbers come only from the TASKS ledger + /tmp/spotlight result files + the cortex-loop log.
+# Keep the three duration measures in separate columns. Do not treat claim to done as "how fast work gets done".
+# If tokens cannot be found, write UNKNOWN. Do not invent a number.
 #
-# 用法：
+# Usage:
 #   bin/cortex-loop-run-report.sh --line cortex-immune
 #   bin/cortex-loop-run-report.sh --line cortex-immune --id-min 34 --id-max 44
 #   bin/cortex-loop-run-report.sh --line cortex-immune --out reports/2026-07-31/cortex-loop/run.md
 #   bin/cortex-loop-run-report.sh --line cortex-immune --json
 #
-# 退出码：0=报告生成  1=参数错  2=关键数据探不清（仍尽量输出）
+# Exit code: 0=report written  1=bad arguments  2=critical data could not be resolved (still print what we can)
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT" || exit 1
@@ -40,7 +40,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ -n "$LINE" ] || { echo "需要 --line" >&2; usage; }
+[ -n "$LINE" ] || { echo "--line is required" >&2; usage; }
 
 export CORTEX_REPORT_LINE="$LINE"
 export CORTEX_REPORT_ID_MIN="${ID_MIN:-}"
@@ -135,7 +135,7 @@ if not tasks:
     # if filter empty, fall back all + warn
     tasks = load_tasks(LINE)
     if ID_MIN or ID_MAX:
-        unknowns.append("id 过滤无命中，已回退为该线全部任务")
+        unknowns.append("id filter matched nothing; fell back to every task on this line")
 
 by_status = {}
 for t in tasks:
@@ -219,7 +219,7 @@ for prompt in spot.glob(f"cortex-loop-{LINE}-*.prompt"):
     # tokens
     # leave for aggregate
 
-# token hunt（IMM-T45：优先 [usage] footer，避免与正文重复计数）
+# token hunt (IMM-T45: prefer the [usage] footer so body text is not counted twice)
 token_input = token_output = None
 token_sources = 0
 usage_lines = 0
@@ -254,7 +254,7 @@ for result in spot.glob(f"cortex-loop-{LINE}-*.result"):
         ):
             usage_unknown += 1
             continue
-        # 每个 footer 只计一对 in/out（prompt/completion 别名不双计）
+        # count only one in/out pair per footer (do not double-count prompt/completion aliases)
         got_in = got_out = False
         for key, acc in (("input_tokens", "in"), ("prompt_tokens", "in"),
                          ("output_tokens", "out"), ("completion_tokens", "out")):
@@ -271,7 +271,7 @@ for result in spot.glob(f"cortex-loop-{LINE}-*.result"):
                 token_sources += 1
     if saw_usage_footer:
         continue
-    # 无 footer 时回退扫正文（旧 result）
+    # no footer: fall back to scanning the body (old result files)
     for mm in tok_re.finditer(rtext):
         token_sources += 1
         if mm.group(1):
@@ -282,15 +282,15 @@ for result in spot.glob(f"cortex-loop-{LINE}-*.result"):
 if token_sources == 0:
     if usage_lines:
         token_note = (
-            f"UNKNOWN（{usage_lines} 条 [usage] footer 均为 UNKNOWN/不可解析；"
-            f"energy 诚实缺数，非 0）"
+            f"UNKNOWN ({usage_lines} [usage] footers are all UNKNOWN or unparseable; "
+            f"energy count is honestly missing, not 0)"
         )
     else:
-        token_note = "UNKNOWN（result 无 usage/token 字段；cheap 未强制吐 JSON）"
+        token_note = "UNKNOWN (result has no usage/token fields; cheap did not force JSON)"
 else:
     token_note = (
         f"input≈{token_input} output≈{token_output} "
-        f"(解析命中 {token_sources} 处；[usage]行={usage_lines} unknown行={usage_unknown})"
+        f"(parsed hits {token_sources}; [usage] lines={usage_lines} unknown lines={usage_unknown})"
     )
 
 # claim→done durations
@@ -345,7 +345,7 @@ if all_ts:
 else:
     wall_start = wall_end = None
     wall_min = idle_min = None
-    unknowns.append("日志无 claim/done 事件，墙钟/闲忙 UNKNOWN")
+    unknowns.append("log has no claim/done events; wall-clock/busy/idle UNKNOWN")
 
 worker_mins = [m for _, m, _, _ in workers]
 # last per tid for median
@@ -356,11 +356,11 @@ wvals = list(last_w.values())
 
 def fmt_stats(vals):
     if not vals:
-        return "UNKNOWN（无样本）"
+        return "UNKNOWN (no samples)"
     vals = sorted(vals)
     mean = sum(vals) / len(vals)
     med = vals[len(vals) // 2]
-    return f"n={len(vals)} 均={mean:.1f}min 中位={med:.1f}min 最小={vals[0]:.1f} 最大={vals[-1]:.1f}"
+    return f"n={len(vals)} mean={mean:.1f}min median={med:.1f}min min={vals[0]:.1f} max={vals[-1]:.1f}"
 
 clock = clock_row(LINE)
 try:
@@ -369,7 +369,7 @@ try:
     ).strip().splitlines()[-1]
 except Exception:
     node = "UNKNOWN"
-    unknowns.append("node-id 探不清")
+    unknowns.append("node-id could not be resolved")
 
 n_total = len(tasks)
 n_done = len(by_status.get("done", []))
@@ -387,82 +387,82 @@ settle_only = sorted(done_ids - claimed) if done_ids else []
 now = datetime.now(TZ)
 title_range = ""
 if ID_MIN or ID_MAX:
-    title_range = f" · id {ID_MIN or '*'}–{ID_MAX or '*'}"
+    title_range = f" | id {ID_MIN or '*'}–{ID_MAX or '*'}"
 
 md = []
-md.append(f"# 跑批报告 · {LINE}{title_range}")
+md.append(f"# run report - {LINE}{title_range}")
 md.append("")
-md.append(f"> 生成：`bin/cortex-loop-run-report.sh` · {now.strftime('%Y-%m-%d %H:%M %z')}")
+md.append(f"> generated: `bin/cortex-loop-run-report.sh` | {now.strftime('%Y-%m-%d %H:%M %z')}")
 md.append("")
 md.append("## TL;DR")
 md.append("")
-md.append("| 项 | 值 |")
+md.append("| item | value |")
 md.append("|----|-----|")
-md.append(f"| 账本任务数（过滤后） | **{n_total}** |")
+md.append(f"| ledger task count (after filter) | **{n_total}** |")
 md.append(f"| done | **{n_done}** |")
 md.append(f"| pending / running | {n_pending} / {n_running} |")
 md.append(f"| waiting_external / blocked | {n_wait} / {n_blocked} |")
-md.append(f"| attempt FAIL 次数（日志） | {n_fail_events} |")
-md.append(f"| 节点（本机） | {node} |")
+md.append(f"| attempt FAIL count (log) | {n_fail_events} |")
+md.append(f"| node (this machine) | {node} |")
 md.append(f"| CLOCK owner / executor | {clock.get('owner','?')} / {clock.get('executor','?')} |")
 if wall_min is not None:
-    md.append(f"| 墙钟跨度 | **{wall_min:.0f} min**（{wall_start.strftime('%H:%M')}→{wall_end.strftime('%H:%M')}） |")
-    md.append(f"| busy / idle（claim 占用） | **{busy_min:.0f} / {idle_min:.0f} min**（{100*busy_min/wall_min:.0f}% / {100*idle_min/wall_min:.0f}%） |")
+    md.append(f"| wall-clock span | **{wall_min:.0f} min** ({wall_start.strftime('%H:%M')}→{wall_end.strftime('%H:%M')}) |")
+    md.append(f"| busy / idle (claim occupancy) | **{busy_min:.0f} / {idle_min:.0f} min** ({100*busy_min/wall_min:.0f}% / {100*idle_min/wall_min:.0f}%) |")
 else:
-    md.append("| 墙钟 / busy / idle | UNKNOWN |")
-md.append(f"| worker 中位（prompt→result） | **{(sorted(wvals)[len(wvals)//2] if wvals else float('nan')):.1f} min**" if wvals else "| worker 中位 | UNKNOWN |")
+    md.append("| wall-clock / busy / idle | UNKNOWN |")
+md.append(f"| worker median (prompt→result) | **{(sorted(wvals)[len(wvals)//2] if wvals else float('nan')):.1f} min**" if wvals else "| worker median | UNKNOWN |")
 if wvals:
-    md[-1] = f"| worker 中位（prompt→result） | **{sorted(wvals)[len(wvals)//2]:.1f} min**（均 {sum(wvals)/len(wvals):.1f}，n={len(wvals)}） |"
+    md[-1] = f"| worker median (prompt→result) | **{sorted(wvals)[len(wvals)//2]:.1f} min** (mean {sum(wvals)/len(wvals):.1f}, n={len(wvals)}) |"
 md.append(f"| token | {token_note} |")
 md.append("")
 
-md.append("## 在哪跑")
+md.append("## where it ran")
 md.append("")
-md.append(f"- **线**：`{LINE}`")
-md.append(f"- **本机 node-id**：`{node}`")
-md.append(f"- **CLOCK**：owner=`{clock.get('owner','?')}` executor=`{clock.get('executor','?')}` "
+md.append(f"- **line**: `{LINE}`")
+md.append(f"- **local node-id**: `{node}`")
+md.append(f"- **CLOCK**: owner=`{clock.get('owner','?')}` executor=`{clock.get('executor','?')}` "
           f"window={clock.get('advance_window_min','?')}min cap/day={clock.get('max_advance_per_day','?')} "
           f"driver=`{clock.get('driver','?')}`")
 if settle_only:
-    md.append(f"- **settle-first 嫌疑**（done 但日志无 claim）：{', '.join(settle_only[:20])}"
+    md.append(f"- **settle-first suspicion** (done but the log has no claim): {', '.join(settle_only[:20])}"
               + ("…" if len(settle_only) > 20 else ""))
 else:
-    md.append("- **settle-first 嫌疑**：无（或过滤后无）")
+    md.append("- **settle-first suspicion**: none (or none after filter)")
 md.append("")
 
-md.append("## 时长三口径（禁止混用）")
+md.append("## three duration measures (do not mix them)")
 md.append("")
-md.append("| 口径 | 结果 | 用途 |")
+md.append("| measure | result | use |")
 md.append("|------|------|------|")
 if wall_min is not None:
-    md.append(f"| ① 墙钟总跨度 | {wall_min:.1f} min | 整场日历时间 |")
-    md.append(f"| ①b busy/idle | {busy_min:.1f} / {idle_min:.1f} min | 有没有 claim 在飞 |")
+    md.append(f"| 1 wall-clock span | {wall_min:.1f} min | calendar time for the whole run |")
+    md.append(f"| 1b busy/idle | {busy_min:.1f} / {idle_min:.1f} min | whether a claim is in flight |")
 else:
-    md.append("| ① 墙钟 / busy/idle | UNKNOWN | — |")
-md.append(f"| ② worker prompt→result | {fmt_stats(wvals)} | **评价干活速度** |")
+    md.append("| 1 wall-clock / busy/idle | UNKNOWN | - |")
+md.append(f"| 2 worker prompt→result | {fmt_stats(wvals)} | **rate how fast work gets done** |")
 cd_vals = [m for _, m in claim_done_mins]
 # unique last per tid
 last_cd = {}
 for tid, m in claim_done_mins:
     last_cd[tid] = m
-md.append(f"| ③ claim→done | {fmt_stats(list(last_cd.values()))} | 仅解释日历被拉长 |")
+md.append(f"| 3 claim→done | {fmt_stats(list(last_cd.values()))} | only explains why the calendar stretched |")
 md.append("")
-md.append("> ② 才是效率 KPI；③ 含失败重试/等人修门，**不能**当平均干活时间。")
+md.append("> 2 is the efficiency KPI; 3 includes failed retries and waiting on a human to fix the gate, and **must not** be treated as average work time.")
 md.append("")
 
 if wvals:
-    md.append("### worker 明细")
+    md.append("### worker detail")
     md.append("")
-    md.append("| 任务 | min |")
+    md.append("| task | min |")
     md.append("|------|-----|")
     for tid in sorted(last_w.keys(), key=lambda x: (id_num(x) or 0, x)):
         md.append(f"| {tid} | {last_w[tid]:.1f} |")
     md.append("")
 
-md.append("## 失败清单（result/日志）")
+md.append("## failure list (result/log)")
 md.append("")
 if fails_detail or fails_n:
-    md.append("| 任务 | FAIL 次数(log) | stage(result) | detail 摘要 |")
+    md.append("| task | FAIL count (log) | stage (result) | detail summary |")
     md.append("|------|----------------|---------------|-------------|")
     # merge
     stages = {}
@@ -475,10 +475,10 @@ if fails_detail or fails_n:
         st, de = stages.get(tid, ("—", "—"))
         md.append(f"| {tid} | {fails_n.get(tid, 0)} | {st} | {de.replace('|', '/')} |")
 else:
-    md.append("（过滤范围内无 attempt FAIL 样本，或日志不在本机 /tmp）")
+    md.append("(no attempt FAIL samples in the filter range, or the log is not on this machine under /tmp)")
 md.append("")
 
-md.append("## 队列终态（账本）")
+md.append("## queue end state (ledger)")
 md.append("")
 for st in ("pending", "running", "done", "waiting_external", "blocked"):
     ids = by_status.get(st, [])
@@ -486,21 +486,21 @@ for st in ("pending", "running", "done", "waiting_external", "blocked"):
               + ("…" if len(ids) > 30 else ""))
 md.append("")
 
-md.append("## 证据路径")
+md.append("## evidence paths")
 md.append("")
-md.append(f"- 账本：`brain-network/directions/{LINE}/TASKS.md`")
-md.append("- 日志：`/tmp/spotlight/cortex-loop.log` · `~/.openclaw/state/cortex-loop.launchd.log`")
-md.append(f"- worker 现场：`/tmp/spotlight/cortex-loop-{LINE}-*.{{prompt,result}}`")
-md.append("- 本脚本：`bin/cortex-loop-run-report.sh`")
+md.append(f"- ledger: `brain-network/directions/{LINE}/TASKS.md`")
+md.append("- logs: `/tmp/spotlight/cortex-loop.log` | `~/.openclaw/state/cortex-loop.launchd.log`")
+md.append(f"- worker artifacts: `/tmp/spotlight/cortex-loop-{LINE}-*.{{prompt,result}}`")
+md.append("- this script: `bin/cortex-loop-run-report.sh`")
 if unknowns:
     md.append("")
-    md.append("## UNKNOWN / 数据缺口")
+    md.append("## UNKNOWN / data gaps")
     md.append("")
     for u in unknowns:
         md.append(f"- {u}")
 md.append("")
 md.append("---")
-md.append("*自动生成 · 禁止把推测写成确定数字*")
+md.append("*auto-generated - do not write guesses as definite numbers*")
 
 text = "\n".join(md) + "\n"
 
@@ -551,8 +551,8 @@ if OUT:
             f"campaign: {LINE}\n"
             "---\n\n"
             "## Timeline\n\n"
-            f"| 时间 | 事件 |\n|------|------|\n"
-            f"| {now.strftime('%Y-%m-%d %H:%M')} | run-report 自动生成 line={LINE} |\n\n"
+            f"| time | event |\n|------|------|\n"
+            f"| {now.strftime('%Y-%m-%d %H:%M')} | run-report auto-generated line={LINE} |\n\n"
         )
         outp.write_text(fm + text, encoding="utf-8")
     else:

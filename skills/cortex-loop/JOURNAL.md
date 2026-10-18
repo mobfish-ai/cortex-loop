@@ -1,461 +1,464 @@
-# cortex-loop — 建设日记
+English | [简体中文](JOURNAL.zh-CN.md)
 
-> **作用域**: 引擎 / 合同 / 蜂群的关键事件与决策转折
-> **主文档**: [[cortex-loop/SKILL|SKILL.md]] · **错题本**: [[cortex-loop/ERRORS|ERRORS.md]]
-> **总纲报告**: [[cortex-loop-intent]]
-> **规矩**: 只记「转折」与「实测证据」，过程流水账不进（ONE-STEP-TRUTH）
+# cortex-loop — build journal
 
----
-
-## 2026-07-30 · S0/S1 真实闭环 + S2 合链接门户影子试点
-
-- **S0/S1**：两批 `map-backlink-gap` 经 launchd `clock-auto` 跑完 26 条严格 discovery→result→world verify→learning；MAP `48/48 OK`
-- **S2**：合链接门户仅做只读 shadow，91 个 comparable cases；结论相对库存基线 `SUPPORTED`，权限保持 `FORBIDDEN` 自动晋级
-- **Dashboard**：首屏四问；manual/auto、canary/production、UNKNOWN/0、累计/滚动分开；真实显示 S0/S1 passed、guardrails UNKNOWN
-- **反身修复**：v3.34 定位 stash owner 丢失后，最终升 Git 提交事务 V4，彻底移除后台 stash/reset/bulk add/merge；无时区 receipt 不再被误判未来；origin 三命名空间由逐 ref fetch 改为批量读取
-- **验证**：suite `49 PASS / 0 FAIL / 1 SKIP`；H03 是人工性价比候选，不伪装成绿
+> **Scope**: key events and decision turns of the engine / contracts / swarm
+> **Main document**: [[cortex-loop/SKILL|SKILL.md]] · **error log**: [[cortex-loop/ERRORS|ERRORS.md]]
+> **Charter report**: [[cortex-loop-intent]]
+> **Rule**: record only "turns" and "measured evidence". Process logs do not enter (ONE-STEP-TRUTH)
 
 ---
 
-## 2026-07-28 · 从「8 份报告 0 行代码」到双端蜂群实测通过
+## 2026-07-30 · S0/S1 real closed loop + an S2 joint-link portal shadow pilot
 
-### 起点：8 份报告，一行能跑的代码都没有
+- **S0/S1**: two `map-backlink-gap` batches ran 26 strict discovery→result→world verify→learning lines through launchd `clock-auto`. MAP `48/48 OK`
+- **S2**: the joint-link portal did read-only shadow only, 91 comparable cases. The conclusion relative to the inventory baseline is `SUPPORTED`. Authority stays `FORBIDDEN` for automatic promotion
+- **Dashboard**: four questions on the first screen. Manual/auto, canary/production, UNKNOWN/0, and cumulative/rolling are separated. It truly shows S0/S1 passed and guardrails UNKNOWN
+- **Reflexive fix**: after v3.34 located a lost stash owner, it finally rose to Git commit transaction V4 and removed background stash/reset/bulk add/merge for good. A receipt with no timezone is no longer misjudged as future. The three origin namespaces changed from per-ref fetch to a batch read
+- **Verification**: suite `49 PASS / 0 FAIL / 1 SKIP`. H03 is a human cost-benefit candidate and is not disguised as green
 
-在此之前，主动性/自主推进这个议题已经攒了 **8 份报告**（[[cortex-loop-intent]] §7 列全）：
+---
+
+## 2026-07-28 · From "8 reports, 0 lines of code" to a two-node swarm that passed live
+
+### Starting point: 8 reports, and not one line of runnable code
+
+Before this, the proactivity / autonomous-advance topic had already accumulated **8 reports** (listed in full in [[cortex-loop-intent]] §7):
 
 `proactive-intent-master-brief` · `proactive-intent-loop-cortex-deliberation` ·
 `nova-proactive-listen-spec` · `direction-cron-proactive-archaeology` ·
 `proactive-intent-loop-codex-review` · `nova-60s-proactive-cortex-fusion` ·
 `recap-35e58e01-agent-proactivity-extract` · `external-nova-agent-import-analysis`
 
-四层模型、状态机、矩阵、Codex 对敲评审全都有了——**没有任何东西在跑**。
-同日亲验的另一个事实把这件事钉死：上一代 `*-advance` 九条**全线蒸发，live=0**，死了几个月，**没有任何文件、任何 commit、任何人发现**。死因不是设计错，是它活在 OpenClaw 的库里、不活在 git 里。
+The four-layer model, the state machine, the matrix, and the Codex cross-review were all there — **nothing was running**.
+Another fact seen firsthand the same day nailed it: the previous generation of nine `*-advance` lines **evaporated across the board, live=0**, dead for months, with **no file, no commit, and no person noticing**. The cause of death was not a wrong design. It lived in OpenClaw's store and did not live in git.
 
-结论：**心跳不能寄生。**
+Conclusion: **a heartbeat cannot be a parasite.**
 
-### 当日 8 个 commit（`git log --oneline` 真查）
+### The day's 8 commits (`git log --oneline`, actually checked)
 
-| # | sha | 时间 | 转折 |
+| # | sha | Time | Turn |
 |---|-----|------|------|
-| 1 | `93ae328c5` | 23:06 | **心跳引擎 + 可换肌肉 adapter** — 引擎零 LLM；AI 三挂载点全部走 adapter；确立不对称铁律 |
-| 2 | `8d49d74b2` | — | **调度声明 CLOCK + 试点线 loop-ops 三合同** — 试点线选「环修自己的地基」而非市调线 |
-| 3 | `ea254e217` | — | **launchd 主时钟 + 总入口报告** — 时钟不寄生；8 份旧报告降为卫星 |
-| 4 | `f63bd4430` | 23:12 | **health 区分「干活失败」vs「报信失败」** + 试点线 T1 交付（见 ERRORS [[cortex-loop/ERRORS\|E005]]） |
-| 5 | `e007fc7ec` | 23:20 | **睡眠感知** + T2 凭据链修复后转 pending 待自然验证（E006 / E007） |
-| 6 | `f227f2868` | 23:32 | **蜂群** — 自我感知 + 群体感知 + owner 分片 + 掉线接管 |
-| 7 | `51d317f9a` | 23:42 | **蜂群总线改走 git ref 层** — 零外部依赖的分布式 CAS 租约锁（E004 在此被拦下） |
-| 8 | `62b597a8b` | 23:44 | **fix**：`list_refs` 格式串转义 → 静默退回文件快照（E003） |
+| 1 | `93ae328c5` | 23:06 | **heartbeat engine + swappable muscle adapter** — the engine is zero LLM; all three AI mount points go through an adapter; the asymmetric hard rule was set |
+| 2 | `8d49d74b2` | — | **schedule declaration CLOCK + the loop-ops pilot line's three contracts** — the pilot line was "the loop repairs its own foundation", not a market-research line |
+| 3 | `ea254e217` | — | **launchd main clock + the front-door report** — the clock is not a parasite; the 8 old reports were demoted to satellites |
+| 4 | `f63bd4430` | 23:12 | **health separates "the work failed" from "the report failed"** + pilot-line T1 delivered (see ERRORS [[cortex-loop/ERRORS\|E005]]) |
+| 5 | `e007fc7ec` | 23:20 | **sleep awareness** + after the T2 credential-chain fix, moved to pending to wait for a natural verification (E006 / E007) |
+| 6 | `f227f2868` | 23:32 | **swarm** — self-perception + swarm perception + owner sharding + offline takeover |
+| 7 | `51d317f9a` | 23:42 | **the swarm bus moved onto the git ref layer** — a distributed CAS lease lock with zero external dependency (E004 was stopped here) |
+| 8 | `62b597a8b` | 23:44 | **fix**: `list_refs` format-string escape → silent fallback to the file snapshot (E003) |
 
 ---
 
-## 关键决策转折（4 个）
+## Key decision turns (4)
 
-### ① 试点线不推业务，先推环自己
+### 1. The pilot line does not push the business. It pushes the loop itself first
 
-试点线本可以选市调之类「看起来有价值」的线。选的是 **`loop-ops`：环修自己的调度底座**。
+The pilot line could have been something that "looks valuable", such as market research. What was chosen is **`loop-ops`: the loop repairs its own scheduling base**.
 
-理由（[[brain-network/directions/loop-ops/INTENT|INTENT]] 原话）：心跳目前挂在一个**自己就有 31% 报错率**的底座上，在这种地基上跑自动推进，产出的是**自动化的假进展**。
-且这是最强的自证——**如果环连自己的运维都推不动，它更推不动市调**。
+Reason (the original words of [[brain-network/directions/loop-ops/INTENT|INTENT]]): the heartbeat currently hangs on a base that **itself has a 31% error rate**. Running automatic advance on that foundation produces **automated fake progress**.
+And this is the strongest self-proof — **if the loop cannot even push its own operations, it certainly cannot push market research**.
 
-### ② 完成判定必须先能报红，才配报绿
+### 2. Completion judgment must be able to go red before it deserves to go green
 
-T3 是**反测哨兵**：它的产出文件（`cortex-loop-never-exists.md`）永远不该存在。
-它一旦变绿，说明有人把完成门放宽了。
+T3 is a **counter-test sentinel**: its output file (`cortex-loop-never-exists.md`) should never exist.
+If it turns green, someone widened the completion gate.
 
-红→绿反证 7 项（[[cortex-loop-intent]] §5 全表），其中最关键的三条：
-- `try-complete --task T3` → `FAIL T3: artifact 缺失` exit=1（门能报红）
-- `try-complete --task T0` → `PASS T0 → done` exit=0（门能转绿）
-- `reconcile`（装 launchd 前）→ `查无此驱动 → 脱钩 DRIFT` DRIFT=1；装载后 → `在跑 → OK` DRIFT=0
+Seven red→green counter-proofs (the full table is [[cortex-loop-intent]] §5). The three that matter most:
+- `try-complete --task T3` → `FAIL T3: artifact missing` exit=1 (the gate can go red)
+- `try-complete --task T0` → `PASS T0 → done` exit=0 (the gate can turn green)
+- `reconcile` (before launchd was installed) → `driver not found → split DRIFT` DRIFT=1; after load → `running → OK` DRIFT=0
 
-### ③ operator 拍板「不用 Redis，纯 git 天然完美解决」
+### 3. The operator decided "no Redis; plain git solves it naturally and completely"
 
-蜂群总线原本要引外部依赖做分布式锁。operator 直接否掉。
+The swarm bus was going to pull in an external dependency for a distributed lock. The operator rejected that outright.
 
-答案是：**`git push` 更新远端 ref 本身就是原子 compare-and-swap**。两个节点拿同一 parent 造 commit 同时推，服务器只让一个 fast-forward 成功，另一个必被 `[rejected] non-fast-forward`——语义等价 Redis SETNX，**零外部服务**。
+The answer: **`git push` updating a remote ref is itself an atomic compare-and-swap**. Two nodes build a commit from the same parent and push at the same time. The server lets only one fast-forward succeed. The other is necessarily `[rejected] non-fast-forward` — semantically equivalent to Redis SETNX, **zero external services**.
 
-实测（真并发，非模拟，见 `51d317f9a` commit message）：
+Measured (real concurrency, not a simulation; see the `51d317f9a` commit message):
 ```
-共同 parent b568f07f4 → nodeA 1f3579ca8 push 成功 / nodeB 824a2e238 [rejected] non-fast-forward
-最终 holder=nodeA，确定性
+shared parent b568f07f4 → nodeA 1f3579ca8 push succeeded / nodeB 824a2e238 [rejected] non-fast-forward
+final holder=nodeA, deterministic
 ```
 
-配套决定：**全程走 git plumbing，不碰工作区**。因为 worker 实况 267 文件未提交、auto-sync 已坏，任何 pull/rebase/checkout 都会被脏树挡住 → 蜂群跟着瞎。ref 层完全绕开工作区。
+Companion decision: **the whole path is git plumbing, and the worktree is not touched**. The worker's live state was 267 uncommitted files and a broken auto-sync. Any pull/rebase/checkout is blocked by the dirty tree → the swarm goes blind with it. The ref layer bypasses the worktree completely.
 
-### ④ 「修好了」的验收必须是自然运行，不是人为触发
+### 4. Acceptance of "fixed" must be a natural run, not an artificial trigger
 
-T2（修 `mercury-daily-ops-report`）根因查到并处置后，**没有**在 23:20 强跑一次日报来让它变绿。
-改为：任务转 `pending`，等 0729-0800 自然运行，环在 09:00 窗口自己核对。
+After T2 (fix `mercury-daily-ops-report`) had its root cause found and handled, the daily was **not** force-run at 23:20 to make it green.
+Instead: the task moved to `pending`, waited for the natural 0729-0800 run, and the loop checked itself in the 09:00 window.
 
-这是 INTENT `Anti` 段「删 job 冒充修好 / 改 short_test 让它变绿」的同一条原则的延伸——**为了变绿而触发的一次成功，不是修好了**。
+This extends the same principle as the INTENT `Anti` section, "deleting a job and calling it fixed / editing short_test to make it green" — **one success triggered in order to turn green is not fixed**.
 
 ---
 
-## 双端蜂群实测（当日收尾证据）
+## Two-node swarm, measured (closing evidence of the day)
 
-`/tmp/spotlight/cortex-loop.log` 亲读：
+`/tmp/spotlight/cortex-loop.log`, read firsthand:
 
 ```
-23:38 | sync nodes=1 beat=True     ← E003 未修：ref 层读空，静默退回本地文件快照，只看得见自己
-23:43 | sync nodes=2 beat=True     ← 62b597a8b 修复后
+23:38 | sync nodes=1 beat=True     ← E003 not yet fixed: the ref layer read empty, silently fell back to the local file snapshot, and could see only itself
+23:43 | sync nodes=2 beat=True     ← after the 62b597a8b fix
 23:44 | sync nodes=2 beat=True
 ```
 
-`git for-each-ref refs/swarm` 实有两条：`refs/swarm/beat/laptop` · `refs/swarm/beat/worker`。
+`git for-each-ref refs/swarm` really has two: `refs/swarm/beat/laptop` · `refs/swarm/beat/worker`.
 
-**从 8 份报告 0 行代码 → 引擎 12 子命令 + 四合同过 gate + launchd 装载 + 红→绿实测 7 项 + 双端蜂群 nodes=2，同日完成。**
+**From 8 reports and 0 lines of code → an engine with 12 subcommands + four contracts past the gate + launchd loaded + 7 red→green live checks + a two-node swarm at nodes=2, finished the same day.**
 
 ---
 
-## 当日留下的账（未完成，不美化）
+## The books left that day (unfinished, not prettified)
 
-| 项 | 状态 | 说明 |
+| Item | State | Note |
 |----|------|------|
-| `loop-ops` T2 | `pending` fails=1 | GLM 摘链 + primary 改 MiniMax 已做，等 0729-0800 自然运行验证 |
-| `loop-ops` T3 | `pending` fails=1 | 反测哨兵，**本来就该永远红**，不是待办 |
-| `CLOCK.loop-ops.executor` | `human` | 安全默认。跑顺了才改 `claude` |
-| 试点线数量 | 1 条 | 只有 loop-ops，业务线尚未接入 |
+| `loop-ops` T2 | `pending` fails=1 | GLM removed from the chain + primary changed to MiniMax, done; waiting for the natural 0729-0800 run to verify |
+| `loop-ops` T3 | `pending` fails=1 | counter-test sentinel; **it is supposed to stay red forever**. It is not a todo |
+| `CLOCK.loop-ops.executor` | `human` | safe default. Change to `claude` only after it runs smoothly |
+| Pilot-line count | 1 line | only loop-ops. No business line is connected yet |
 
 ---
 
-## 2026-07-29 · 从「能跑」到「不看着也能跑对」
+## 2026-07-29 · From "it can run" to "it can run correctly when nobody is watching"
 
-> 这天引擎从 **1093 行长到 4125 行**（近 4 倍），子命令 12 → 31，工具 0 → 5，Layer 0 律 +5 条。
-> 但真正的转折不是加了多少功能，是**发现「能跑」和「跑对」是两件事**——
-> 07-28 收盘时环已经会自己推进了，07-29 一整天在回答的问题是：
-> **它推进的那些，有几件是真的？**
+> That day the engine grew from **1093 lines to 4125 lines** (nearly 4×), subcommands 12 → 31, tools 0 → 5, Layer 0 laws +5.
+> But the real turn was not how many features were added. It was **discovering that "it can run" and "it runs correctly" are two things** —
+> at the 07-28 close the loop could already advance itself. The question 07-29 spent the whole day answering was:
+> **of the things it advanced, how many were real?**
 
 ---
 
-### 00:00–01:00 · 上线即挨打：三个引擎级缺陷
+### 00:00–01:00 · Hit the moment it went live: three engine-level defects
 
-`2eda7fa95` 一个 commit 修三个：心跳被 health 掐死 / `reconcile` 把「没能力检测」报成「坏了」/ 内部口径不自洽。
+`2eda7fa95`, one commit, fixed three: the heartbeat was strangled by health / `reconcile` reported "cannot detect" as "broken" / internal definitions were not self-consistent.
 
-第二个尤其典型 —— 它是 **E013 维度坍缩的第一次现形**，只是当时还没起名字：
-「**检测不出来**」和「**检测出来是坏的**」被压成同一个返回值，于是一台没装 systemd 的机器被报成「驱动坏了」。
+The second was especially typical — it is **the first appearance of the E013 dimensional collapse**, only it had no name yet:
+"**cannot detect it**" and "**detected that it is broken**" were flattened into the same return value, so a machine with no systemd was reported as "the driver is broken".
 
-同时段建了两件后来一直在用的东西：
-- `9422cca9b` **24 用例套件 + 变异测试**——不只测「过没过」，还**故意改坏代码验证测试真的会红**。
-  这条规矩后面救了命：10:36 的负向测试直接逮到「**我自己写的修复是死的**」（`991016f78`）。
-- `6e5944883` **对外 API + MCP**——对内对外**同一道六定律门**。不做两个入口两套规则。
+Two things built in the same stretch are still in use:
+- `9422cca9b` **a 24-case suite + mutation tests** — not only "did it pass", but **deliberately break the code and verify the test really goes red**.
+  This rule saved us later: the 10:36 negative test caught "**the fix I wrote myself is dead**" (`991016f78`).
+- `6e5944883` **external API + MCP** — the same six-law gate inside and outside. Not two entrances with two rule sets.
 
-### 01:00–02:30 · 从「被派活」到「自己找活」
+### 01:00–02:30 · From "being assigned work" to "finding work itself"
 
-`6192092af` `discover` 自主找活。紧接着 `8f0b45897` **把找活策略从「挑最有价值的」改成「补低洼」**。
+`6192092af` `discover` finds work on its own. Right after, `8f0b45897` **changed the find-work strategy from "pick the most valuable" to "fill the low spots"**.
 
-改的理由不是效率，是**目标函数选错了**：求最大值会让环反复扑同一个热点，
-而蜂群要的是**降方差**——让最弱的那条腿别一直瘸着。这跟后来「蜂群整体信任 = 加权均值 **× 短板因子**」是同一个思路。
+The reason was not efficiency. **The objective function was wrong**: maximizing makes the loop pounce on the same hot spot again and again,
+and what a swarm wants is **lower variance** — the weakest leg should not stay lame. This is the same idea as the later "swarm-wide trust = weighted mean **× bottleneck factor**".
 
-`b1189b725` `tick --auto` 真正闭环（发现 → 自动发布 → 自动认领执行）。**闭环当天就出事**：
+`b1189b725` `tick --auto` truly closed the loop (discover → auto-publish → auto-claim and execute). **The closed loop had an incident the day it closed**:
 
-| 时间 | commit | 真机逮到什么 |
+| Time | commit | What the live machine caught |
 |------|--------|-------------|
-| 02:25 | `bac0c69b7` | `artifact='-'` 占位符被 C1 和机械门当成**真实路径** |
-| 02:52 | `314d641ef` | **假完成**：`short_test` 复用扫描器退出码 + 验证器失败开放，两层同时失守（E011 → T3/T4） |
+| 02:25 | `bac0c69b7` | the placeholder `artifact='-'` was treated as a **real path** by C1 and the mechanical gate |
+| 02:52 | `314d641ef` | **false completion**: `short_test` reused the scanner exit code + the verifier failed open, and both layers fell at once (E011 → T3/T4) |
 
-> **全自动闭环首跑的价值不在于它跑通了，在于它立刻暴露了假完成。**
-> 手动跑一万次都不会发现——因为手动跑的人会顺手把 `-` 当占位符看懂。
+> **The value of the first fully automatic closed-loop run is not that it ran through. It is that it exposed a false completion immediately.**
+> Ten thousand manual runs would not have found it — because the person running it by hand would have understood `-` as a placeholder in passing.
 
-### 03:00–08:00 · 4 小时无人值守窗口：最贵也最值的一段
+### 03:00–08:00 · A 4-hour unattended window: the most expensive stretch, and the most worth it
 
-这段没人看着。醒来发现：
+Nobody was watching this stretch. On waking:
 
-1. `2ebcf66d2` **`revive` 从不自动触发** —— 写了自愈但没接上，环在无脑重试同一个坏执行器。
-2. `724117356` **4 小时全线 403 的真因是 launchd 缺代理变量，不是锁屏**。
-   先前的假设（「锁屏导致」）是错的，commit message 里明确写了「**更正错误假设**」。
-   → 直接催生 **T2 跨环境一致性铁律**（`c858a9ef9` 同时立了 6 条置顶铁律 + E012）。
+1. `2ebcf66d2` **`revive` never triggered automatically** — self-heal was written and not wired. The loop was blindly retrying the same bad executor.
+2. `724117356` **the real cause of 4 hours of 403 across the line was launchd missing the proxy variables, not the lock screen**.
+   The earlier hypothesis ("caused by the lock screen") was wrong. The commit message explicitly wrote "**correcting a wrong hypothesis**".
+   → this directly produced **hard rule T2, cross-environment parity** (`c858a9ef9` set 6 pinned hard rules and E012 at the same time).
 
-**为什么这 4 小时值**：交互式 shell 里一切正常，是**无人值守**才暴露的差异。
-环境不一致这类缺陷，**只有在没人能顺手补救的时候才现形**。
+**Why these 4 hours were worth it**: everything looks normal in an interactive shell. The difference is exposed only **unattended**.
+A defect of this class, environment inconsistency, **appears only when nobody is there to patch it by hand**.
 
-同期并行的一大批 `fix(frontmatter)` / `fix(data-recovery)` / `fix(conflict-markers)` 不是本域的活，
-是环**自己扫出来的缺口**（633 个 mossriver YAML 崩坏、假合并丢失的 50+ 个 AI 产出）——
-这是「自主找活」第一次真的产出了人不知道的东西。
+A large parallel batch of `fix(frontmatter)` / `fix(data-recovery)` / `fix(conflict-markers)` in the same period was not this domain's work.
+It was gaps **the loop scanned out itself** (633 broken mossriver YAML files, 50+ AI outputs lost to a fake merge) —
+the first time "find work on its own" really produced something a person did not know about.
 
-### 08:00–09:10 · PULSE 上时钟 + 传播门
+### 08:00–09:10 · PULSE onto a clock + the propagation gate
 
-`bb07bba02` **PULSE 从「靠 AI 记得跑」变成「机器自己跑」**。
+`bb07bba02` **PULSE changed from "depends on AI remembering to run it" to "the machine runs it itself"**.
 
-触发是 operator 一句「**不是定期做吗？**」。
-这是 [[latch-doctrine|LATCH 律]] 的教科书场景：规则写的是「交付前必跑」，但**依赖 AI 记得的规则在 in-context 惯性下必然被绕过**。
-第 3 次出现就该建 Hook，而不是加第 3 条提醒文字。
+The trigger was one operator sentence: "**weren't we supposed to do this on a schedule?**".
+This is a textbook scene of [[latch-doctrine|LATCH law]]: the rule is written "must run before delivery", but **a rule that depends on AI remembering will be bypassed under in-context inertia**.
+The third occurrence should build a Hook, not add a third reminder sentence.
 
-`54b1dd836` **补传播门** —— 抓到幽灵完成 `real1/R2`：worker 判了 done，**产出从没进过 git 历史**。
-本机磁盘上有文件 ≠ 完成。蜂群是靠 git 看见彼此的活的。
+`54b1dd836` **added the propagation gate** — caught ghost completion `real1/R2`: the worker judged done, and **the output had never entered git history**.
+A file on the local disk is not completion. A swarm sees each other's work through git.
 
-> 一小时后 `28f7d5d41` 打脸：**传播门 v1 是假门**。
-> v1 只查 `git log -1 -- <artifact>` 非空 —— 但「文件历史上进过 git」和「**这次的改动进了 git**」是两回事。
-> 真机当场证明 v1 放行了「有历史但改了没提交」。→ v2 改查 origin 可达性。**这条后来升为 T8。**
+> An hour later `28f7d5d41` slapped it: **propagation gate v1 was a fake gate**.
+> v1 only checked that `git log -1 -- <artifact>` was non-empty — but "the file has entered git in its history" and "**this change entered git**" are two different things.
+> A live machine proved on the spot that v1 let through "it has history, and the edit was not committed". → v2 checks origin reachability. **This later rose to T8.**
 
-### 10:30–11:30 · fail-open 族总清算 + E013 起名
+### 10:30–11:30 · The fail-open family cleared, and E013 was named
 
-`22b23217c` **三处 fail-open 静默失明**，commit message 原话：「**越瞎越能干活的荒谬全部堵掉**」。
+`22b23217c` **three fail-open silent blindnesses**. The commit message's own words: "**the absurdity of the blinder it is, the more work it can do, is fully plugged**".
 
-这是当天最关键的一次抽象跃迁 —— 之前每次都当成孤立 bug 修，这次终于看出**是同一个母题**：
-> 判断不出来的时候，代码倾向于**倒向「通过」**，因为倒向通过不会报错。
-> 于是**观测能力越差的节点，通过率越高**。
+This was the day's most important jump in abstraction — before, each one was fixed as an isolated bug. This time it was finally seen as **the same root pattern**:
+> when a judgment cannot be made, the code tends to **collapse toward "pass"**, because collapsing toward pass does not raise an error.
+> So **the worse a node's ability to observe, the higher its pass rate**.
 
-`9415010f2` 把它立成 **[[dimensional-expansion-doctrine|高维展开铁律]]**，并做了两件超出「修 bug」的事：
-- **扩大化**：grep 全域找同类，逐处三态化（`02c3edacb` 是第 5 处）
-- **机械沉淀**：`dimensional-collapse-scan.sh` 扫描器接进 suite —— 靠人记必然复发
+`9415010f2` made it the **[[dimensional-expansion-doctrine|high-dimension expansion hard rule]]**, and did two things beyond "fix the bug":
+- **widen**: grep the whole domain for the same class, and make each site three-state (`02c3edacb` is site 5)
+- **mechanical residue**: the `dimensional-collapse-scan.sh` scanner was wired into the suite — relying on memory guarantees a relapse
 
-**判据不是「能不能穷举」，是「这两态合并，会不会有人因此做错下一步动作」。**
-会 → 展开；不会 → 合并。不是无限穷举。
+**The criterion is not "can it be enumerated exhaustively". It is "if these two states are merged, will someone therefore take the wrong next action".**
+Yes → expand. No → merge. Not infinite enumeration.
 
-### 12:00–14:00 · 三条律成型 + 蜂群总纲
+### 12:00–14:00 · Three laws took shape + the swarm charter
 
-| 时间 | commit | 立了什么 | 触发它的坑 |
+| Time | commit | What was set | The pit that triggered it |
 |------|--------|---------|-----------|
-| 12:52 | `a923e1072` | [[steer-doctrine\|STEER 律]] | 单会话内 **6 次结论腐烂**——站在上一轮结论上继续推，全推错 |
-| 13:39 | `f32f0b96f` | [[atomize-tools-doctrine\|ATOMIZE 律]] + `cortex-probe.sh` | 单日**四次手搓命令量具失灵**，每次都长得像结果而不像故障 |
-| 13:28 | `02d53a821` | [[brain-network/directions/loop-ops/CHARTER-SWARM\|CHARTER-SWARM]] | 目标散落各处 → ci 无从核对「有没有被改松」 |
+| 12:52 | `a923e1072` | [[steer-doctrine\|STEER law]] | **6 rotten conclusions inside one session** — standing on the previous round's conclusion and pushing further, all of it wrong |
+| 13:39 | `f32f0b96f` | [[atomize-tools-doctrine\|ATOMIZE law]] + `cortex-probe.sh` | **four hand-rolled command measuring tools failed in one day**, and each time it looked like a result rather than a fault |
+| 13:28 | `02d53a821` | [[brain-network/directions/loop-ops/CHARTER-SWARM\|CHARTER-SWARM]] | goals scattered everywhere → ci had nothing to check "was it loosened" against |
 
-ATOMIZE 那四次失灵值得单记，因为**它们全都不报错**：
-`grep -E` 里 `\|` 不是或运算（静默匹配不到）· 管道吞掉退出码 ×2 · `ls` 多路径退出码骗人。
-所以判据不是「麻烦不麻烦」，是「**这条命令搓错过吗**」—— **搓错过的优先级最高，它已证明会再骗人一次**。
+ATOMIZE's four failures are worth a note of their own, because **none of them raised an error**:
+`\|` inside `grep -E` is not OR (it silently matches nothing) · a pipe swallowed the exit code ×2 · `ls` with multiple paths lied about its exit code.
+So the criterion is not "is it a bother". It is "**has this command fooled us before**" — **one that has fooled us has the highest priority. It has already proved it will fool us again**.
 
-`d747af8da` + `742ba002c` 六定律**负向测试**补齐 C1/C2/C3 + V1/V2/V3。
-写负向测试的动机是回答一个具体的质疑：「**是不是真机械化，还是只是文档里说机械化**」。
+`d747af8da` + `742ba002c` filled in the six-law **negative tests** for C1/C2/C3 + V1/V2/V3.
+The motive for writing negative tests was to answer a concrete challenge: "**is it really mechanical, or does the document only say it is mechanical**".
 
-### 14:00–15:30 · 白盒三件套 + 一个必须记下的错误
+### 14:00–15:30 · The glass-box trio + an error that had to be written down
 
-`6d16a350c` `cortex-trace.sh`（透明机箱）→ `e78d6fdd3` `cortex-dashboard.sh`（一屏总览）→ `e002c7438` `cortex-ci.sh`（每日约束）。
+`6d16a350c` `cortex-trace.sh` (transparent case) → `e78d6fdd3` `cortex-dashboard.sh` (one-screen overview) → `e002c7438` `cortex-ci.sh` (daily constraint).
 
-三者与 probe/pulse 凑成五工具，**正交不重叠**。ci 与 pulse 的分工是这天想清楚的：
-> **一个系统完全可以很健康地跑偏**——指标全绿，但门被悄悄放宽、目标被悄悄降低。
-> 所以 pulse 问「今天健不健康」，ci 问「**还是不是原来那个东西**」，且 ci 退出码 **2 = 目标被改松**，比测试失败更严重。
+The three plus probe/pulse make five tools, **orthogonal and not overlapping**. The split between ci and pulse was thought through that day:
+> **a system can drift while looking perfectly healthy** — metrics all green, but a gate was quietly widened and a goal was quietly lowered.
+> So pulse asks "is it healthy today", ci asks "**is this still the same thing**", and ci exit code **2 = a goal was loosened**, which is more serious than a test failure.
 
-`e5e61a678` **dashboard `--json` 输出非法 JSON**。
-这个 bug 单独记，因为它不是格式问题：**人读那面毫无异样，机读那面直接断**——
-自愈链的第一环就断在这里，而没有任何人会察觉。这正是 [[glassbox-doctrine|GLASSBOX 律]]「人机同读**同一份**真相」的反面：
-只要两面来源不同，**分叉是必然的，且总是机器那面先烂**。
+`e5e61a678` **dashboard `--json` emitted illegal JSON**.
+This bug is recorded on its own because it is not a format problem: **the human-readable side showed nothing wrong, and the machine-readable side broke outright** —
+the first link of the self-heal chain broke here, and nobody would notice. This is the opposite of [[glassbox-doctrine|GLASSBOX law]], "human and machine read **the same** truth":
+as long as the two sides come from different sources, **a fork is inevitable, and the machine side always rots first**.
 
-同段还有两条自我纠错，如实记：
-- `e78d6fdd3` commit message 里写明「**撤回我一个基于错误前提的修复**」
-- `7f3f05678` 复核发现 13:34 那次实测**跑的是修复前的代码**（用打印字符串为证）——
-  结论对不对先不论，**前提本身是假的**，整条推论作废
+Two self-corrections in the same stretch, recorded as they were:
+- the `e78d6fdd3` commit message wrote "**withdrawing a fix of mine that rested on a wrong premise**"
+- `7f3f05678` review found that the 13:34 live run **ran the pre-fix code** (proved by a printed string) —
+  whether the conclusion was right is a separate question. **The premise itself was false**, and the whole inference is void
 
-### 15:00–16:00 · 补上「我不受约束」这个漏洞
+### 15:00–16:00 · The "I am unconstrained" hole was closed
 
-`22d5ccb62` → `ab69450ee` **主线程升为完整对等节点**。
+`22d5ccb62` → `ab69450ee` **the main thread was promoted to a full peer node**.
 
-起因是一个很不舒服的自问：环给每个自动节点算信任、扣违约分，
-**但发号施令的那个（我）不在任何账本里**。这等于「谁定规则谁豁免」。
+The cause was an uncomfortable question asked of itself: the loop computes trust and deducts breach points for every automatic node,
+**but the one giving the orders (me) is in no ledger**. That equals "whoever sets the rules is exempt".
 
-解法是把主线程做成 `orchestrator-<host>` 独立节点（`kind=orchestrator`，人机接口非执行体），
-配 `checkin` / `credit` / `fault` 三个子命令——**有扣分必须有加分，否则没人敢自主**。
-`c739cc3a1` 紧接着修「违约扣到了错误的节点」，且**误记豁免不删账**——错记也是记录，删了就没法复盘。
+The solution is to make the main thread an independent node `orchestrator-<host>` (`kind=orchestrator`, a human-machine interface, not an executor),
+with three subcommands `checkin` / `credit` / `fault` — **a penalty requires a reward, or nobody dares to act autonomously**.
+`c739cc3a1` immediately fixed "the breach was deducted from the wrong node", and **a mistaken record is exempt from deletion** — a wrong record is still a record. Delete it and there is no review.
 
-**蜂群整体信任 = 加权均值 × 短板因子**，不是取平均了事：
-一个 L1 节点能干的坏事，不会因为旁边站着一个 L5 就变少。
+**Swarm-wide trust = weighted mean × bottleneck factor**, not an average and done:
+the harm an L1 node can do does not shrink because an L5 is standing next to it.
 
-`216a194d0` `readjudicate` 冤判复核，过门率 **20% → 75%**。
-关键在于它是「**用当前判据重判**」，不是特赦 —— 判据改准之后，之前被烂判据误杀的要还回来，
-但**判据本身不能为了好看而放松**（那是 ci 退出码 2 要抓的事）。
+`216a194d0` `readjudicate`, a review of wrong judgments. Gate-pass rate **20% → 75%**.
+The point is that it is "**rejudge with the current criterion**", not a pardon — after the criterion is corrected, what a rotten criterion wrongly killed has to be given back,
+but **the criterion itself must not be relaxed to look better** (that is what ci exit code 2 exists to catch).
 
-### 16:00–20:00 · 信任是刷的还是干的
+### 16:00–20:00 · Was the trust farmed or earned
 
-`0f167ca4d` **E014 空转刷分**：判据**本来就满足**的任务，重跑一遍仍计 passed。
-一次放行 17 条，事后查出 **7 条是空转**。
+`0f167ca4d` **E014 no-op score farming**: a task whose criterion **was already met**, rerun, still counted as passed.
+17 let through at once. Afterward **7 were no-ops**.
 
-根因不是判据写错，是**用错了严格度**：
-> 在信任 **L1** 的阶段用了**抽检**的严格度。
+The root cause was not a wrongly written criterion. **The wrong strictness was used**:
+> at trust **L1**, **sampling** strictness was used.
 
-`d121dc721` 补上分档（服装厂验货逻辑）：新供应商全检，老供应商抽检。
+`d121dc721` added the tiers (garment-factory inspection logic): a new supplier is fully inspected; an established supplier is sampled.
 
-| 信任 | 强度 | 查什么 |
+| Trust | Intensity | What is checked |
 |------|------|--------|
-| 低 | **全检** | 不只验「判据现在过」，还验「**这次做完世界有没有变化**」 |
-| 中 | 抽检 | 仍过 AI 验收，但不逐件查时间戳 |
-| L4/L5 | 免检 | 机械门过了就认，省下验收调用（验收本身要烧模型调用） |
+| low | **full check** | not only "the criterion passes now", but also "**did the world change when this finished**" |
+| mid | sample | still passes AI acceptance, but timestamps are not checked item by item |
+| L4/L5 | exempt | if the mechanical gate passed, accept it, and save the acceptance call (acceptance itself burns a model call) |
 
-`34e8450f1` + `6a3bd6d3c` **E015 闲置率 59% 的根因链**，这是当天最长的一条因果链：
+`34e8450f1` + `6a3bd6d3c` **the cause chain of E015's 59% idle rate**, the longest cause chain of the day:
 
 ```
-空转门识别出第四态 → 但只 continue、没给它落脚点
-  → moot 被折叠回 pending → 计划永远闭不了
-  → tick「先接旧活」分支被一个早已没活的计划锁住
-  → 6 拍零产出
-  ＋ 认领与执行互相把对方算成负载 → 节点显示满载，实则零产出
+the no-op gate recognized a fourth state → but only continued, and gave it nowhere to land
+  → moot was folded back into pending → the plan could never close
+  → tick's "pick up old work first" branch was locked by a plan that had long had no work
+  → 6 ticks of zero output
+  + claim and execute each counted the other as load → the node showed full, and output was actually zero
 ```
 
-修法是给第四态**自己的命名空间** `refs/swarm/<swarm>/moot`。
-为什么不塞进 `result`：**空转既不该加分也不该扣分**，塞进去会污染 HAAS 与过门率。
-—— 这条后来升为 **T9**。
+The fix gives the fourth state **its own namespace**, `refs/swarm/<swarm>/moot`.
+Why not stuff it into `result`: **a no-op should neither add points nor remove them**. Stuffing it in pollutes HAAS and the gate-pass rate.
+— This later rose to **T9**.
 
-`bin/cortex-loop idle` 同时诞生，因为讨论闲置率时发现**分母就是错的**：
-墙钟应跑 96 拍，但笔记本合盖那些拍机器**根本没跑**。用墙钟当分母，闲置率是虚构的。
-四态口径：有产出 / 记终态 / 真闲置 / **认不出**（独立第三态，不倒向任何一边）。
+`bin/cortex-loop idle` was born at the same time, because discussing the idle rate showed **the denominator itself was wrong**:
+wall clock should have run 96 ticks, but the ticks while the laptop lid was closed **never ran**. Using wall clock as the denominator makes the idle rate fiction.
+Four-state definition: produced / terminal recorded / truly idle / **cannot tell** (an independent third state; it does not collapse toward either side).
 
 ---
 
-## 三个反复出现的元模式（当天最该记住的）
+## Three meta-patterns that kept reappearing (what most needed remembering that day)
 
-### ① 每一道新门，首日必被自己的实测打脸
+### 1. Every new gate is slapped by its own live check on day one
 
-传播门 v1（9:00 立 → 10:52 被证伪）· PULSE（8:56 立 → 9:09 修自己首日暴露的两个缺陷）·
-`991016f78`「负向测试逮到我自己的修复是死的」。
+Propagation gate v1 (set at 9:00 → falsified at 10:52) · PULSE (set at 8:56 → two defects it exposed on day one were fixed at 9:09) ·
+`991016f78`, "a negative test caught my own fix being dead".
 
-**推论**：门立完不算完成，**门被自己的测试红过一次才算**。
-所以 suite 里每个负向测试都要经破坏性验证——不验证「真的会红」的测试，本身就是一道假门。
+**Corollary**: setting the gate is not completion. **The gate counts only after its own test has gone red once.**
+So every negative test in the suite must pass a destructive check — a test that does not prove "it really goes red" is itself a fake gate.
 
-### ② 判据的严格度必须随信任变化，固定严格度两头不讨好
+### 2. A criterion's strictness must change with trust. A fixed strictness pleases neither end
 
-固定严格 = 高信任节点白烧验收调用；固定宽松 = 低信任节点空转刷分（E014 实测 7/17）。
-这跟「AI 只有否决权没有批准权」是同一原则的两个层：**不对称**是本质，对称是偷懒。
+Fixed strict = a high-trust node burns acceptance calls for nothing. Fixed loose = a low-trust node farms score with no-ops (E014 measured 7/17).
+This is the same principle as "AI has veto power and no approval power", on two layers: **asymmetry** is the essence. Symmetry is laziness.
 
-### ③ 「我不在账本里」是最容易忽略的漏洞
+### 3. "I am not in the ledger" is the easiest hole to miss
 
-给别人立规矩很自然，把自己放进同一套规矩里要专门想一下。
-`orchestrator-*` 节点 + `fault` / `credit` 是这天补的，但它暴露的是更普遍的盲区：
-**元治理层默认豁免自己**。—— 与 [[epiplexity]] 公理 1 同源：同一观察者评自己的产出，盲区完全重合。
+Making rules for other people is natural. Putting yourself inside the same rules takes a deliberate thought.
+The `orchestrator-*` node + `fault` / `credit` were added that day, but what they expose is a more general blind spot:
+**the meta-governance layer exempts itself by default.** — Same origin as [[epiplexity]] axiom 1: the same observer scoring its own output has a blind spot that coincides completely.
 
 ---
 
-## 当日留下的账（未完成，不美化）
+## The books left that day (unfinished, not prettified)
 
-| 项 | 状态 | 说明 |
+| Item | State | Note |
 |----|------|------|
-| suite H03 维度坍缩扫描 | **SKIP** | 1 处候选待人工核对「性价比是否值得展开」，非红非绿 |
-| `loop-ops` T2 | 未证实修好 | 第 4 轮确认是 **openclaw CLI 结构性阻塞**，非 mercury 本身问题（`f176a2594`） |
-| 过门率 | 20% → 75%（readjudicate 后） | 仅作累计战绩；target 未批准，不作为完成门 |
-| 闲置率 | 59% → 根因已修，**效果待下一个完整无人值守窗口验证** | 修在 19:40，当天没有足够长的窗口复验 |
-| 自造损伤 | 已如实记（`e8efd0a34`） | `ANTHROPIC_API_KEY` 污染 adapter + 我自己造成的孤儿认领 |
+| suite H03 dimensional-collapse scan | **SKIP** | 1 candidate waiting for a person to judge "is the cost-benefit worth expanding"; neither red nor green |
+| `loop-ops` T2 | not confirmed fixed | round 4 confirmed it is an **openclaw CLI structural block**, not a problem in mercury itself (`f176a2594`) |
+| gate-pass rate | 20% → 75% (after readjudicate) | cumulative track record only; the target is not approved, and it is not a completion gate |
+| idle rate | 59% → root cause fixed, **the effect waits for the next full unattended window to verify** | fixed at 19:40; that day had no window long enough to re-check |
+| self-inflicted damage | recorded as it was (`e8efd0a34`) | `ANTHROPIC_API_KEY` polluted the adapter + an orphan claim I caused myself |
 
 ---
 
-## 2026-07-30 · S0/S1/S2 闭环后的独立审计
+## 2026-07-30 · Independent audit after the S0/S1/S2 closed loop
 
-- 两批 `clock-auto` 计划形成 26 条完整 discovery/result/learning lineage，MAP 48/48
-- S2 合链接门户只读影子回放完成，仍禁止自动晋级
-- 第一轮 Dashboard 虽能显示 lineage，却把“窗口未批准”误写成“无 cohort”，并把回执字段绑定夸成 VERIFIED
-- 独立审计后拆成：`BASELINE` / `UNMEASURED`、legacy `unclassified` debt、
+- two `clock-auto` plan batches formed 26 complete discovery/result/learning lineages. MAP 48/48
+- the S2 joint-link portal read-only shadow replay finished, and automatic promotion is still forbidden
+- the first Dashboard round could show lineage, but it miswrote "window not approved" as "no cohort", and inflated receipt-field binding into VERIFIED
+- after the independent audit it was split into: `BASELINE` / `UNMEASURED`, legacy `unclassified` debt,
   `receipt_binding` / `origin_reachability` / `verification_replay`
-- 第二位独立复验又用“可达 commit + 不存在的 artifact 路径”打穿一次，最终收紧为
-  **origin head 可达 commit × 安全仓库相对路径 × blob 存在**三项同时成立
-- Dashboard 本地 origin 路径建立 `<15s` 预算，当前 fixture 实测通过；JSON invalid reasons 只保留 5 条摘要
+- a second independent re-check punched through once more with "a reachable commit + an artifact path that does not exist", and it was finally tightened to
+  **an origin-head reachable commit × a safe repo-relative path × the blob exists**, all three at once
+- the Dashboard's local origin path has a `<15s` budget. The current fixture passes live. JSON invalid reasons keep only a 5-item summary
 
-机械门：`python3 bin/cortex-loop-tests/fixtures/negtest-dashboard-json.py`
-
----
-
-## 2026-07-31 · 执行引擎从“会回话”升级为“真干活”
-
-### 15:28 · Repair Controller、MiniMax 与指标合同最终闭环
-
-- 日累计预算升级为 Git ref CAS；named-task 增加 clean/commit/origin 三验。
-- 失败上下文从 `/tmp` 迁到有界、脱敏、原子持久账本，重启后仍可进入 repair。
-- raw MiniMax/GLM 从 `exec.*` 降为 `text.*`；`cheap` 以 Claude Code + CC Switch
-  MiniMax 作为唯一廉价 workspace executor。
-- Mercury 真跑 MiniMax 成功；T2、T18 完成，三条信任 ref 已到 origin。
-- HIVE 任一 PENDING 即 fail-closed；live WeCom 内联 webhook 改共享 resolver。
-- G1 retry duplicate 与 G2 `_settled` 污染修复；批准 G1 7 天、G2 24 小时两个 90%。
-  当前 G1 69.2% 如实红，G2 100% 绿。
-- fresh suite `49/0/1`；live autonomy `10 PASS / 0 FAIL / 0 UNKNOWN`。
-
-### 13:57 · mercury 旧模型覆盖揭晓
-
-`openclaw cron get` 证明 `mercury-daily-ops-report` 仍有独立 per-job 覆盖：
-Gemini timeout 后回退失效 GLM 401，累计 13 次错误。defaults 与 Cortex adapter
-切到 MiniMax 并不会穿透 cron 覆盖。已用官方 CLI 改为
-`minimax/MiniMax-M2.7` 并清空 fallback；真实运行会把运营日报发到 Telegram，
-需明确外发批准后再验收，未运行前不判 done。
-
-- 真机确认 `cheap` 原先只是 raw MiniMax/GLM 文本补全，任务从未获得工作区工具。
-- 改成 MiniMax-backed Claude Code 工具层，并以 `/tmp` Write+Read 证明真实执行。
-- T21、T15、T19、T22 已通过各自 short_test 与完成门；launchd 首拍真实 claim T18。
-- 补单实例 tick、worker PID 锁、失败短退避、孤儿回执恢复、任务合同/short_test 防篡改。
-- Dashboard 实时解析两份 TASKS，显示逐线 running、fails、launchd runs/last-exit/heartbeat。
-- 新增 task-add/list/show/retry/run 原子命令；任务生命周期不再靠手搓 Markdown。
-- 生产权限全套 suite：49 PASS / 0 FAIL / 1 SKIP（H03 人工成本收益候选）。
-
-根因与证据：`reports/2026-07-31/cortex-loop/cortex-loop-execution-engine-closure.md`。
-
-## 2026-08-01 · 锁域从全局串行改为最小资源互斥
-
-- 删除全生命周期 tick lock；异任务并发、同任务 task flock 排重。
-- TASKS 多字段原子写 + status CAS；task-add 私有候选先过 gate 后发布。
-- cheap 改为 3 Worker 槽 + MiniMax account lease；冷却状态加 flock/fsync/replace。
-- Git transaction 增加活 owner/stale/index/merge 判定，candidate scan 与 deploy 移出锁；
-  pre-commit 禁止裸提交自建锁。
-- H23 与 Git V4 专项全绿；Dashboard H09 no-origin fixture 去除真仓泄漏。
-
-### 23:13–23:45 · 执行面升级为低磁盘分布式交付
-
-- 复盘证明只缩 Git transaction 不够：控制 ref 已分布式，Worker 仍共写根 worktree/index。
-- 实测稀疏 linked worktree 仅新增 6.4M，而共享对象库约 3.4G；据此否决“完整 worktree 每任务复制”的方案。
-- 新增 workspace broker、candidate publisher、blobless integrator 与 delivery-plane inspector；崩溃、残锁、磁盘不足、越界、只读依赖、short_test 红、双写 CAS 全有负测。
-- 完成语义拆成 candidate-visible 与 master-landed；前者只进 `integration_pending`，后者才允许 done。
-- Dashboard 新增交付流水线，分别显示隔离舱、Candidate、集成回执、landed、retryable 与异常。
-- EXPECTATIONS reader 修掉 `**met**` 误判及短行静默丢弃：真实总数从错误的 8 恢复为 20（met 12 / gap 4 / unknown 4）。
-
-## 2026-08-02 · Dashboard Ctrl-C 批量误杀根治
-
-- 两次 GUI 级联不是内存泄漏：系统日志明确记录由旧 `pkill` 分别终止 63、42 个进程。
-- PATH 被 `/usr/local/bin` 的 `proctools/0.4pre1` 影子工具劫持；它在 macOS 26.3 忽略 `-P`。
-- Dashboard watch 删除后台 collector、1Hz 全量重绘与父 PID 追杀，改为单前台同步快照；备用屏只承担原位显示，并在退出时恢复原终端状态。
-- 影子 pgrep/pkill 已移入可恢复隔离目录；运行脚本统一显式 `/usr/bin/pgrep`。
-- H33 验证 SIGINT 退出 130 且无残留进程组；H34 阻止影子二进制与裸进程查询调用回归。
-
-### 06:54–07:11 · squash/replay 结算语义闭环
-
-- 集成器会把多个源提交重放成一个 canonical commit；旧完成门只认源提交成为 master 祖先，导致内容已上线仍永久 settling。
-- 新增统一结算检查：本地路径必须存在、非空、tracked、clean 且绑定源提交，再比较源提交与 canonical tip 的精确 blob OID。
-- source OID 不可达但所有 artifact/check 路径 blob 完全一致时，以 `content-equivalent` 证明落地；任一路径不同仍拒绝完成。
-- `task-show --settlement` 与完成门共用同一 helper；T64–T67 逐条经原子完成门从 settling 进入 done。
-- H35 覆盖 squash/replay 正例、canonical 内容不一致、本地脏改、check 未落地与只读查询零副作用；全套 62 PASS / 0 FAIL。
-- integrator 首次复验正确拒绝分叉内容冲突；随后补齐 `candidate compose` 原子入口，以临时 index 把精确写集投影到最新 canonical，避免手搓与共享仓 merge。
-
-## 2026-08-02 · sparse attempt 失败回滚与旧舱收口
-
-- 旧 T66 三个 attempt 在 V4 hook 失败后各从 1 个脏文件膨胀为约 2.9 万删除，定位到 tree 回滚丢 `skip-worktree` 元数据。
-- V4 改为原始 index 文件快照；新增 skip-worktree 回归并通过完整专项。
-- 三份不同 artifact 以原 SHA-256 归档，重应用 sparse 规则后均为 clean，再由 workspace broker 安全释放；分支和内容均保留。
+Mechanical gate: `python3 bin/cortex-loop-tests/fixtures/negtest-dashboard-json.py`
 
 ---
 
-## 2026-08-16 · 逻辑会话隔离不得退化为完整 worktree
+## 2026-07-31 · The execution engine upgraded from "it can reply" to "it really does the work"
 
-- 为 ROSACE/ROSEUM 做知识交接时，错误地沿用了项目默认的完整 worktree 入口；该错误与磁盘余量无关，根因是把 Session/Agent/Topic 的逻辑隔离误当成文件系统隔离。
-- 已将 E029 写入 `ERRORS.md`，并把硬规则同步到 Layer0 与长版 HIVE 指南：共享 OB1 的 Codex 会话必须 `environment=local`；需要隔离且写集已知时使用稀疏 broker；完整 worktree 只留给确有并发代码冲突或高风险探索的例外。
-- 知识交接、只读审计、品牌规划、数据读取和跨 Runtime 迁移，永远不能因为“磁盘够”而复制整仓。错题、规则、报告和记忆落在主 OB1 真相源。
+### 15:28 · Repair Controller, MiniMax, and the metrics contract finally closed
+
+- the daily cumulative budget was upgraded to a Git ref CAS; a named task gained the three checks clean/commit/origin.
+- failure context moved from `/tmp` to a bounded, redacted, atomic persistent ledger, and can still enter repair after a restart.
+- raw MiniMax/GLM was demoted from `exec.*` to `text.*`; `cheap` uses Claude Code + CC Switch
+  MiniMax as the only cheap workspace executor.
+- Mercury really ran MiniMax successfully. T2 and T18 completed. Three trust refs are on origin.
+- any HIVE PENDING is fail-closed. The live WeCom inline webhook changed to a shared resolver.
+- the G1 retry duplicate and the G2 `_settled` pollution were fixed. G1 7 days and G2 24 hours were approved, both at 90%.
+  Current G1 69.2% is honestly red. G2 100% is green.
+- fresh suite `49/0/1`. Live autonomy `10 PASS / 0 FAIL / 0 UNKNOWN`.
+
+### 13:57 · The mercury old-model override came to light
+
+`openclaw cron get` proved `mercury-daily-ops-report` still had an independent per-job override:
+after a Gemini timeout it fell back to a dead GLM 401, 13 errors accumulated. Switching defaults and the Cortex adapter
+to MiniMax does not pierce a cron override. The official CLI was used to change it to
+`minimax/MiniMax-M2.7` and clear the fallback. A real run would send the operations daily to Telegram.
+Acceptance waits for explicit outbound approval. It is not judged done before it has run.
+
+- a live machine confirmed `cheap` had originally been only a raw MiniMax/GLM text completion. Tasks never got workspace tools.
+- it was changed to a MiniMax-backed Claude Code tool layer, and a real execution was proved with `/tmp` Write+Read.
+- T21, T15, T19, and T22 have passed their own short_test and the completion gate. Launchd's first tick really claimed T18.
+- added a single-instance tick, a worker PID lock, a short failure backoff, orphan-receipt recovery, and tamper protection for the task contract / short_test.
+- the Dashboard parses both TASKS files live and shows per-line running, fails, and launchd runs/last-exit/heartbeat.
+- added the atomic commands task-add/list/show/retry/run. The task lifecycle no longer depends on hand-rolled Markdown.
+- the production-permission full suite: 49 PASS / 0 FAIL / 1 SKIP (H03 is a human cost-benefit candidate).
+
+Root cause and evidence: `reports/2026-07-31/cortex-loop/cortex-loop-execution-engine-closure.md`.
+
+## 2026-08-01 · The lock domain changed from global serialization to minimum-resource exclusion
+
+- deleted the whole-lifetime tick lock. Different tasks run concurrently. The same task is deduped by a task flock.
+- TASKS multi-field atomic write + status CAS. task-add's private candidate passes the gate before it is published.
+- cheap changed to 3 Worker slots + a MiniMax account lease. Cooldown state gained flock/fsync/replace.
+- the Git transaction gained live-owner/stale/index/merge judgment. Candidate scan and deploy moved out of the lock.
+  pre-commit forbids a bare commit from creating its own lock.
+- H23 and the Git V4 special all green. Dashboard H09 no-origin fixture no longer leaks the real repo.
+
+### 23:13–23:45 · The execution plane upgraded to low-disk distributed delivery
+
+- the review proved that shrinking the Git transaction was not enough: control refs were already distributed, and Workers still co-wrote the root worktree/index.
+- a measured sparse linked worktree added only 6.4M, while the shared object store is about 3.4G. On that basis the plan "copy a full worktree per task" was rejected.
+- added a workspace broker, a candidate publisher, a blobless integrator, and a delivery-plane inspector. Crash, stale lock, low disk, out of bounds, a read-only dependency, a red short_test, and a dual-write CAS all have negative tests.
+- completion semantics split into candidate-visible and master-landed. The former enters only `integration_pending`. Only the latter may be done.
+- the Dashboard added a delivery pipeline, showing the isolation cabin, Candidate, integration receipt, landed, retryable, and anomalies separately.
+- the EXPECTATIONS reader fixed a `**met**` misjudgment and the silent drop of short rows: the real total recovered from a wrong 8 to 20 (met 12 / gap 4 / unknown 4).
+
+## 2026-08-02 · Dashboard Ctrl-C batch mis-kill rooted out
+
+- the two GUI cascades were not a memory leak: the system log explicitly records an old `pkill` terminating 63 and 42 processes.
+- PATH was hijacked by the `proctools/0.4pre1` shadow tool in `/usr/local/bin`. On macOS 26.3 it ignores `-P`.
+- Dashboard watch deleted the background collector, the 1Hz full redraw, and the parent-PID hunt, and changed to a single foreground synchronous snapshot. The spare screen only displays in place, and restores the original terminal state on exit.
+- shadow pgrep/pkill were moved into a recoverable isolation directory. Running scripts uniformly use explicit `/usr/bin/pgrep`.
+- H33 verifies SIGINT exits 130 with no residual process group. H34 stops the shadow binary and a bare process-query call from regressing.
+
+### 06:54–07:11 · Squash/replay settlement semantics closed
+
+- the integrator replays several source commits into one canonical commit. The old completion gate accepted only a source commit that had become an ancestor of master, so content already live stayed in permanent settling.
+- a unified settlement check was added: the local path must exist, be non-empty, be tracked, be clean, and be bound to the source commit, then the exact blob OID of the source commit and the canonical tip are compared.
+- when the source OID is unreachable but every artifact/check path blob matches exactly, landing is proved by `content-equivalent`. Any different path still refuses completion.
+- `task-show --settlement` and the completion gate share the same helper. T64–T67 each entered done from settling through the atomic completion gate.
+- H35 covers the squash/replay positive case, canonical content mismatch, a local dirty edit, a check not landed, and a read-only query with zero side effect. The full suite is 62 PASS / 0 FAIL.
+- the integrator's first re-check correctly refused a forked content conflict. `candidate compose` was then added as an atomic entrance, projecting the exact write set onto the latest canonical with a temporary index, so hand-rolling and a shared-repo merge are avoided.
+
+## 2026-08-02 · Sparse attempt failure rollback and old-cabin closeout
+
+- after a V4 hook failure, three old T66 attempts each swelled from 1 dirty file to about 29,000 deletions. The cause was a tree rollback dropping `skip-worktree` metadata.
+- V4 changed to a raw index-file snapshot. A skip-worktree regression was added and the full special passed.
+- three different artifacts were archived at their original SHA-256. After the sparse rules were reapplied, all were clean, then safely released by the workspace broker. Branch and content were both kept.
+
+---
+
+## 2026-08-16 · Logical session isolation must not degrade into a full worktree
+
+- during the ROSACE/ROSEUM knowledge handoff, the project's default full-worktree entrance was reused by mistake. The error has nothing to do with free disk. The root cause was mistaking the logical isolation of Session/Agent/Topic for filesystem isolation.
+- E029 was written into `ERRORS.md`, and the hard rule was synced to Layer0 and the long HIVE guide: a Codex session that shares OB1 must be `environment=local`. When isolation is needed and the write set is known, use the sparse broker. A full worktree is reserved for the exception where a concurrent code conflict or a high-risk exploration is real.
+- knowledge handoff, a read-only audit, brand planning, a data read, and a cross-runtime migration must never copy the whole repo because "there is enough disk". Error entries, rules, reports, and memory land in the main OB1 source of truth.
 
 ---
 
 ## Nav
 
-| 文档 | 关系 |
+| Document | Relation |
 |------|------|
-| [[cortex-loop/SKILL\|SKILL.md]] | 主文档：9 条置顶铁律 / 五工具 / 三时钟 / 31 子命令 / 合同体系 |
-| [[cortex-loop/ERRORS\|ERRORS.md]] | E001–E029 + 压轴教训「静默降级比报错更危险」 |
-| [[cortex-loop-intent]] | 心跳总纲（canonical reading entry） |
-| [[brain-network/directions/loop-ops/CHARTER-SWARM\|CHARTER-SWARM]] | 蜂群总纲：目标 G1–G6 / 范围 |
-| [[cortex-loop-cron-error-triage]] | 试点线 T1 产出：10 条 error job 五类根因 |
-| [[CLOCK]] | 调度声明 |
-| [[knowledge-contract-registry]] | §4.12 四文件合同 · §4.12a ref 层协议 |
-| [[steer-doctrine]] · [[pulse-doctrine]] · [[dimensional-expansion-doctrine]] · [[atomize-tools-doctrine]] · [[glassbox-doctrine]] | 当天诞生于本域踩坑的五条 Layer 0 律 |
+| [[cortex-loop/SKILL\|SKILL.md]] | main document: 9 pinned hard rules / five tools / three clocks / 31 subcommands / the contract system |
+| [[cortex-loop/ERRORS\|ERRORS.md]] | E001–E029 + the capstone lesson "silent degradation is more dangerous than an error" |
+| [[cortex-loop-intent]] | heartbeat charter (canonical reading entry) |
+| [[brain-network/directions/loop-ops/CHARTER-SWARM\|CHARTER-SWARM]] | swarm charter: goals G1–G6 / scope |
+| [[cortex-loop-cron-error-triage]] | pilot-line T1 output: 10 error jobs, five root-cause classes |
+| [[CLOCK]] | schedule declaration |
+| [[knowledge-contract-registry]] | §4.12 four-file contract · §4.12a ref-layer protocol |
+| [[steer-doctrine]] · [[pulse-doctrine]] · [[dimensional-expansion-doctrine]] · [[atomize-tools-doctrine]] · [[glassbox-doctrine]] | five Layer 0 laws born that day from pitfalls in this domain |
 
 ---
 
-*建立: 2026-07-28 · 续: 2026-07-29*
+*Established: 2026-07-28 · continued: 2026-07-29*
 
 ---
 
 <!-- cortex:map-backlink d-112009e679396742854f3a6a -->
-关联地图：[[skills/cortex-loop/MAP|Cortex Loop 全景地图]]
+Related map: [[skills/cortex-loop/MAP|Cortex Loop panorama]]
 
-## 2026-08-27 · CORTEX Harness 归一清理：先身份，再处置
+## 2026-08-27 · CORTEX Harness normalization cleanup: identity first, then disposition
 
-- 本轮把 5 条交叉审计视角改成了 5 个互斥处理批次；每个批次只拥有自己的路径集合，最终处置仍由统一清单收拢。
-- 实际快照会随并行 worker 变化，因此 135/140/142 只能作为带时间的快照，不能当固定分母。最终清单必须冻结 `origin/main`、worktree registry、common-dir、remote、dirty/lock/进程和唯一 disposition。
-- `${CORTEX_WORKSPACE_ROOT}/` 是混合路径：按 Git common-dir 区分 Cortex Harness 与 OB1，不能按目录名删除。OB1 总仓及其镜像保持不动。
-- 7 个候选在 canonical `origin/main` 上发生 `modify/delete` 或依赖缺失，已保留源证据并拒绝强行整合；10 个明确无注册、无锁、无进程的临时目录已可恢复地移入 Trash。
-- 继续清理时发现一条跨仓库登记：目标目录的 `.git` 指向独立临时 common-dir，canonical `git worktree remove` 因归属不一致而拒绝。复核其 clean、无进程、6.4 MB 后移入可恢复 Trash，再 prune canonical 失效登记；同步删除 4 个确认重复的本地分支，远端分支保留。当前 canonical registry 为 127，18 dirty、1 locked/initializing，未把剩余 clean 树自动当垃圾。
+- this round turned 5 crossing audit viewpoints into 5 mutually exclusive handling batches. Each batch owns only its own path set. The final disposition is still gathered by one list.
+- the live snapshot changes with parallel workers, so 135/140/142 can only be snapshots with a time. They cannot be a fixed denominator. The final list must freeze `origin/main`, the worktree registry, common-dir, remote, dirty/lock/process, and a unique disposition.
+- `${CORTEX_WORKSPACE_ROOT}/` is a mixed path: distinguish Cortex Harness from OB1 by Git common-dir. Do not delete by directory name. The OB1 main repo and its mirrors stay put.
+- 7 candidates hit `modify/delete` or a missing dependency on canonical `origin/main`. Source evidence was kept and a forced integration was refused. 10 temporary directories that were clearly unregistered, unlocked, and had no process were moved into recoverable Trash.
+- further cleanup found one cross-repo registration: the target directory's `.git` pointed at an independent temporary common-dir, and canonical `git worktree remove` refused because ownership did not match. After re-checking that it was clean, had no process, and was 6.4 MB, it was moved into recoverable Trash, then the stale canonical registration was pruned. 4 confirmed-duplicate local branches were deleted at the same time. Remote branches were kept. The current canonical registry is 127, with 18 dirty and 1 locked/initializing. The remaining clean trees were not automatically treated as garbage.
 
-## 2026-08-27 · 第二轮审计工具化
+## 2026-08-27 · The second audit round was made into a tool
 
-- 第一轮的有效经验被转成原子合同：即时快照、Git identity、状态分轴、价值复核、可恢复引用和漂移失效；第二轮不再直接复用旧数字或旧清单。
-- 工具边界固定为 read-only manifest：它可以生成唯一 disposition 和 `STALE_SNAPSHOT`，但不执行迁移、删除、prune 或授权。后续轮次只消费该 manifest，再由独立执行门决定动作。
-- 经验同步写入 dispatch/cortex-loop 错题本与 MEMORY；canonical Cortex Harness 已有 legacy repository audit 工具，后续只做最小增量，不重复造同义工具。
-## 2026-08-20 · 固定编组先于并发：Codex 子席越界
+- the first round's useful experience was turned into an atomic contract: an on-the-spot snapshot, Git identity, state on separate axes, a value review, a recoverable reference, and drift invalidation. The second round does not reuse old numbers or the old list directly.
+- the tool boundary is fixed as a read-only manifest: it can generate a unique disposition and `STALE_SNAPSHOT`, and it does not execute migration, deletion, prune, or authorization. Later rounds only consume that manifest, and an independent execution gate decides the action.
+- the experience was synced into the dispatch/cortex-loop error log and MEMORY. Canonical Cortex Harness already has a legacy repository audit tool. Later work is only a minimum increment. A synonymous tool is not built again.
 
-本轮暴露出“有并发槽位”不能推出“可以增加 Codex 子席”。CORTEX 的编组合同必须先于调度：4+3+2 固定为 Grok×2、Claude×2、MiniMax×3、Codex Luna×1、DeepSeek×1。已加入 Eval 负例和 Layer-0 禁令。
+## 2026-08-20 · Fixed formation before concurrency: a Codex child seat crossed the bound
+
+This round exposed that "there is a concurrency slot" does not imply "a Codex child seat may be added". CORTEX's formation contract must come before scheduling: 4+3+2 is fixed as Grok×2, Claude×2, MiniMax×3, Codex Luna×1, DeepSeek×1. An Eval negative case and a Layer-0 prohibition were added.

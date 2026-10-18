@@ -1,10 +1,10 @@
 ---
 name: cortex-loop
 description: |
-  CORTEX 心跳与蜂群：git 时钟推进任务（tick/try-complete/swarm/DRIFT）。AI 只有否决权，done 只能机械门写。
-  Triggers: cortex-loop / 心跳 / 自动推进 / 方向线推进 / tick / 蜂群 / 租约 / HAAS /
+  CORTEX heartbeat and swarm: a git clock advances work (tick/try-complete/swarm/DRIFT). AI has veto power only; done can be written only by the mechanical gate.
+  Triggers: cortex-loop / heartbeat / auto-advance / direction-line advance / tick / swarm / lease / HAAS /
   cortex-dashboard / cortex-probe / cortex-pulse / DRIFT.
-  WHEN NOT: 一次性任务或战略拍板 → 直接做或 /hive; 写不出 short_test 先澄清完成标准.
+  WHEN NOT: one-shot tasks or a strategic call go straight to the work or /hive; if you cannot write a short_test, clarify the completion bar first.
 type: skill
 status: active
 version: 2.1.0
@@ -16,249 +16,250 @@ related_rules: [ground-first-doctrine, steer-doctrine, pulse-doctrine, dimension
 tags: [cortex-loop, proactive, heartbeat, swarm, contract, runtime-agnostic, trust, observability]
 d_tier: D3
 ---
+English | [简体中文](SKILL.zh-CN.md)
 
-# cortex-loop — CORTEX 心跳与蜂群
+# cortex-loop — CORTEX heartbeat and swarm
 
-> **v2.1.0** · 建立 2026-07-28 · 蜂群化 2026-07-29 · 按四问重组 2026-07-29
-> **真相源**：`bin/cortex-loop`（引擎）· `bin/cortex-loop-adapters/*.sh`（肌肉）· [[CLOCK]]（调度声明）
-> **终局意图** [[cortex-loop/INTENT|INTENT.md]] · **错题本** [[cortex-loop/ERRORS|ERRORS.md]]（含 E031–E035 归一/快照门）· **日记** [[cortex-loop/JOURNAL|JOURNAL.md]] · **期待** [[cortex-loop/EXPECTATIONS|EXPECTATIONS.md]]
-> **默认质量门**（2026-08-02）：主线程 = 编排/验证节点；执行 = HIVE/sub-agent/worker。代码/多文件/高风险任务必须先有 `success_criteria` + `short_test` + 本地门；生产库/钱/权限/账务、破坏性动作或目标歧义按 [[AGENT-CORE|AGENT-CORE §3.2]] 走人闸。普通可逆本地变更与 code PR 可自动推进，Guardian 通过后由 Merger 自动合并。小改、纯查询、低风险机械命令可主线程直做。L2 最小机械预检：`python3 bin/agent-dispatch-contract-gate.py <contract.md> --json`。声明了 `collaboration_pattern=distributed|long_proof` 时，同一门还拦 critic/falsifier 与 `failed_route_keep`。
-> **编排内核5层**（2026-08-13 拍板）：本 `success_criteria`/`short_test` 合同即 dispatch-contract，是 5层编排内核里 Hatch 那一层；完整5层定位见 [[../loop-engineering-hub/SKILL#2-4-按合同分层-5层编排内核-2026-08-13-拍板-cortex-ob1-默认实施|loop-engineering-hub §2.4]]。协作模式字段见 [[../../aboutme/methods/structure-as-contract/dispatch-contract#03a-collaboration-pattern-spec-not-a-third-role-table|dispatch-contract §0.3a]]。
+> **v2.1.0** · established 2026-07-28 · swarm form 2026-07-29 · reorganized around the four questions 2026-07-29
+> **Source of truth**: `bin/cortex-loop` (engine) · `bin/cortex-loop-adapters/*.sh` (muscle) · [[CLOCK]] (schedule declaration)
+> **Terminal intent** [[cortex-loop/INTENT|INTENT.md]] · **error log** [[cortex-loop/ERRORS|ERRORS.md]] (includes the E031–E035 normalize / snapshot gates) · **journal** [[cortex-loop/JOURNAL|JOURNAL.md]] · **expectations** [[cortex-loop/EXPECTATIONS|EXPECTATIONS.md]]
+> **Default quality gate** (2026-08-02): the main thread is an orchestration and verification node; execution is HIVE / sub-agent / worker. Code, multi-file, and high-risk tasks must have `success_criteria` + `short_test` + a local gate first. Production databases, money, permissions, accounting, destructive actions, or an ambiguous goal take the human gate in [[AGENT-CORE|AGENT-CORE §3.2]]. Ordinary reversible local changes and code PRs may advance automatically, and Merger auto-merges after Guardian passes. Small edits, pure queries, and low-risk mechanical commands may be done directly on the main thread. L2 minimum mechanical preflight: `python3 bin/agent-dispatch-contract-gate.py <contract.md> --json`. When `collaboration_pattern=distributed|long_proof` is declared, the same gate also blocks a missing critic/falsifier and a missing `failed_route_keep`.
+> **Five-layer orchestration kernel** (decided 2026-08-13): this `success_criteria` / `short_test` contract is the dispatch-contract, the Hatch layer of the five-layer orchestration kernel. The full five-layer placement is in [[../loop-engineering-hub/SKILL|loop-engineering-hub §2.4]]. Collaboration-pattern fields are in [[../../aboutme/methods/structure-as-contract/dispatch-contract#03a-collaboration-pattern-spec-not-a-third-role-table|dispatch-contract §0.3a]].
 
 ---
 
-## 一 · 你是谁
+## 1 · Who you are
 
-> **cortex-loop = 把「事情往前走」的触发权，从人的记忆里搬到 git 里的时钟上。**
-> 人提供**意图**；只有 §3.2 指定的生产、钱、权限、破坏性或目标歧义才需要拍板。拆解、推进、判完成、卡住来烦人——归环。
+> **cortex-loop moves the trigger that "keeps work moving" off a person's memory and onto a clock that lives in git.**
+> The person supplies **intent**. A call is required only for the production, money, permission, destructive, or goal-ambiguity cases named in §3.2. Decomposition, advance, completion judgment, and nagging when stuck belong to the loop.
 
-| 层 | 是什么 | 住在哪 | 会不会死 |
+| Layer | What it is | Where it lives | Can it die |
 |----|--------|--------|---------|
-| **账本** | 意图 + 任务 + 证据 | git：`CLOCK.md` / `INTENT.md` / `TASKS.md` / `JOURNAL.md` | 不会 |
-| **心跳** | 到点叫醒账本，纯代码零 LLM | launchd `com.cortex.loop`（900s） | 重启自恢复；OpenClaw 挂了不受影响 |
-| **肌肉** | 真正干活/判断的 AI | `bin/cortex-loop-adapters/{cheap,claude,codex,ollama,mock}.sh` | adapter 必须具备工作区工具能力；只返回文本不算执行 |
+| **Ledger** | intent + tasks + evidence | git: `CLOCK.md` / `INTENT.md` / `TASKS.md` / `JOURNAL.md` | no |
+| **Heartbeat** | wakes the ledger on time; plain code, zero LLM | launchd `com.cortex.loop` (900s) | recovers on restart; an OpenClaw outage does not affect it |
+| **Muscle** | the AI that actually does the work or judges it | `bin/cortex-loop-adapters/{cheap,claude,codex,ollama,mock}.sh` | an adapter must have workspace tool capability; returning text alone is not execution |
 
-**边界**：不发明目标、不越过 §3.2 人闸；在已授权范围内自主拆解、推进和恢复。只做人做不好的两件事——**不忘**、**不停**。
+**Boundary**: it does not invent goals and it does not cross the §3.2 human gate. Inside the authorized range it decomposes, advances, and recovers on its own. It only does the two things a person does badly: **not forgetting** and **not stopping**.
 
-## 二 · 从哪来
+## 2 · Where it came from
 
-**病**：CORTEX 所有资产都是被动的（MEMORY / STATUS / Directions / 全部 skills），只在「有人来读」那一刻才存在。**时钟源是 operator 本人** —— 一件事只要他没想起来，就永久停在原地，跟没写过一样。
+**The disease**: every CORTEX asset is passive (MEMORY / STATUS / Directions / every skill). It exists only in the moment someone comes to read it. **The clock source is the operator** — if the operator does not remember a thing, it stays stopped forever, the same as if it had never been written.
 
-**逼出它的两个事实**（2026-07-28 亲验）：① 主动性议题已攒 **8 份报告、0 行能跑的代码**；② 上一代 `*-advance` 九条**全线蒸发 live=0**，死了几个月**没有任何文件、任何 commit、任何人发现** —— 因为它活在 OpenClaw 的库里、**不活在 git 里**。结论：**心跳不能寄生。**
+**Two facts that forced it into existence** (seen firsthand on 2026-07-28): (1) the proactivity topic had already accumulated **8 reports and 0 lines of runnable code**; (2) the previous generation of nine `*-advance` lines **evaporated across the board, live=0**, dead for months with **no file, no commit, and no person noticing** — because it lived in OpenClaw's store and **did not live in git**. Conclusion: **a heartbeat cannot be a parasite.**
 
-| 阶段 | 转折 | 证据 |
+| Phase | Turn | Evidence |
 |------|------|------|
-| 07-28 | 从 0 到双端蜂群：引擎 + CLOCK 合同 + launchd 时钟 + git ref CAS 租约 | 8 commit，`93ae328c5`→`62b597a8b` |
-| 07-29 上午 | 发现「能跑」≠「跑对」：传播门、PULSE 上时钟、fail-open 族总清算 | E011/E012/E013 |
-| 07-29 下午 | 白盒三件套 + 补「我不受约束」漏洞（`orchestrator-*` 节点 + fault/credit） | `22d5ccb62` `ab69450ee` |
-| 07-29 晚 | 信任是刷的还是干的：空转门 + 第四态 `moot` + 查验强度分档 | E014/E015 |
-| 07-30 | 26 条真 lineage 被 naive 时间误判未来；来源可读 ≠ 解释正确 | E016 |
+| 07-28 | from zero to a two-node swarm: engine + CLOCK contract + launchd clock + git ref CAS lease | 8 commits, `93ae328c5`→`62b597a8b` |
+| 07-29 morning | "it runs" is not "it runs correctly": propagation gate, PULSE on a clock, fail-open family cleared | E011/E012/E013 |
+| 07-29 afternoon | glass-box trio + the "I am unconstrained" hole closed (`orchestrator-*` node + fault/credit) | `22d5ccb62` `ab69450ee` |
+| 07-29 evening | is trust earned or farmed: no-op gate + fourth state `moot` + inspection intensity by tier | E014/E015 |
+| 07-30 | 26 real lineages misjudged as future time by naive timestamps; a readable source is not a correct interpretation | E016 |
 
-全文见 [[cortex-loop/JOURNAL|JOURNAL.md]]。**这天新增的 6 条 Layer 0 律全部诞生于本 Skill 的踩坑**，不是先有律再有实现（见 §关联 Layer 0 律）。
+The full text is in [[cortex-loop/JOURNAL|JOURNAL.md]]. **All six Layer 0 laws added that day were born from pitfalls in this Skill**, not written as laws before the implementation (see the related Layer 0 laws section).
 
-## 三 · 到哪去
+## 3 · Where it is going
 
-**终局方向真相源** = [[cortex-loop/INTENT|INTENT]]；
-[[brain-network/directions/loop-ops/CHARTER-SWARM|CHARTER-SWARM]] 定义 S0/S1 运行边界；
-`brain-network/directions/loop-ops/METRICS.json` 定义 G1/G2 的 cohort、窗口、样本、baseline、
-target 与审批证据。`bin/cortex-ci.sh` 验证合同完整性和门未漂移（退出码 2），不把口头数字写死。
+**The terminal-direction source of truth** is [[cortex-loop/INTENT|INTENT]].
+[[brain-network/directions/loop-ops/CHARTER-SWARM|CHARTER-SWARM]] defines the S0/S1 operating boundary.
+`brain-network/directions/loop-ops/METRICS.json` defines the G1/G2 cohort, window, sample, baseline,
+target, and approval evidence. `bin/cortex-ci.sh` checks that the contract is intact and the gates have not drifted (exit code 2). It does not freeze spoken numbers into the gate.
 
-| 阶段 | 当前判据 | 看哪里 |
+| Stage | Current criterion | Where to look |
 |------|----------|--------|
-| S0 可信底座 | run receipt 能追溯 source/claim/origin/world，缺一不结算 | `fixture-result-receipt.py` + origin result ref |
-| S1 自运维 | eligible 已知任务无人值守完成 discovery→learning lineage | `cortex-metrics.py --json` + Dashboard |
-| G1/G2 | 无完整 baseline、滚动窗、最小样本和批准证据时不激活目标 | `METRICS.json` |
-| 辅助诊断 | 健康、信任、闲置、积压不能替代阶段证据 | `cortex-dashboard.sh` |
-| G6 | 蜂群健康分 ≥85 | 92「健康」 | ✅（但权重待复核：过门率差 44pt 只扣 8 分） |
+| S0 trusted base | a run receipt can trace source/claim/origin/world; missing any one of them means no settlement | `fixture-result-receipt.py` + origin result ref |
+| S1 self-ops | eligible known tasks complete the discovery→learning lineage unattended | `cortex-metrics.py --json` + Dashboard |
+| G1/G2 | do not activate a target without a complete baseline, rolling window, minimum sample, and approval evidence | `METRICS.json` |
+| Auxiliary diagnosis | health, trust, idle, and backlog cannot replace stage evidence | `cortex-dashboard.sh` |
+| G6 | swarm health score ≥85 | 92 "healthy" | ✅ (weights still need review: a 44pt gate-pass gap only costs 8 points) |
 
-**「要做但一直还没做到」的完整清单 → [[cortex-loop/EXPECTATIONS|EXPECTATIONS.md]]**（含机读 `--json` 出口）。
+**The full list of "we should have this and still do not" is in [[cortex-loop/EXPECTATIONS|EXPECTATIONS.md]]** (including the machine-readable `--json` exit).
 
-## 四 · 来干什么
+## 4 · What it is here to do
 
-子命令归七族。任务查询/生成/重排均已原子化；`task-run` 与 AI 挂载点会烧额度，其余控制面为零 LLM 纯代码。
-无人值守默认每条线每拍只推进 1 个任务；`max_advance_per_day` 是日上限，不得再误作单拍并发量。
-确需提高吞吐时显式设置 `CORTEX_MAX_ADVANCE_PER_TICK`，仍受日上限约束。
-退出码统一：`0`=正常 / `1`=红灯或失败 / `2`=用法错。
+Subcommands fall into seven families. Task query, create, and requeue are atomic. `task-run` and the AI mount points burn quota; the rest of the control plane is zero-LLM plain code.
+Unattended, the default is to advance only 1 task per line per tick. `max_advance_per_day` is a daily cap and must not be mistaken again for per-tick concurrency.
+When more throughput is truly required, set `CORTEX_MAX_ADVANCE_PER_TICK` explicitly. It is still bound by the daily cap.
+Exit codes are uniform: `0` = ok / `1` = red or failed / `2` = usage error.
 
-| 族 | 干什么 | 子命令 |
+| Family | What it does | Subcommands |
 |----|--------|--------|
-| 心跳与账本 | 到点推进、原子建卡/查询/重排/挂起/恢复/撤销假完成、判完成 | `tick` `task-add` `task-list` `task-show` `task-retry` `task-hold` `task-resume` `task-reopen` `task-run` `next` `submit` `try-complete` `status` `idle` |
-| 自检与对账 | 地基健不健康、声明与实际有没有脱钩 | `health` `reconcile` `dashboard` `why` `value` |
-| 蜂群协调 | 谁在线、哪条线归谁、锁怎么抢 | `swarm` `sync` `lease` `caps` `checkin` |
-| 去中心化分发 | 一个计划怎么被多台机自主认领并汇总 | `discover` `plan` `claim` `run` `result` `gather` |
-| 信任与约束 | 谁能干多大的事、凭什么这么判 | `trust` `attest` `fault` `credit` `readjudicate` `model` |
-| **AI 挂载点（烧额度）** | 拆解意图、独立验收 | `decompose` `judge` |
-| 对外与自愈 | 别的系统怎么调、执行器挂了怎么办、姊妹仓库 agent-runtime 怎么真实跑起来 | `api` `revive` `harness-run` |
+| Heartbeat and ledger | advance on time; atomically create / query / requeue / hold / resume / undo a false completion; judge completion | `tick` `task-add` `task-list` `task-show` `task-retry` `task-hold` `task-resume` `task-reopen` `task-run` `next` `submit` `try-complete` `status` `idle` |
+| Self-check and reconcile | is the foundation healthy; have declaration and reality come apart | `health` `reconcile` `dashboard` `why` `value` |
+| Swarm coordination | who is online, which line belongs to whom, how locks are taken | `swarm` `sync` `lease` `caps` `checkin` |
+| Decentralized dispatch | how one plan is claimed autonomously by many machines and then gathered | `discover` `plan` `claim` `run` `result` `gather` |
+| Trust and constraint | who may do how much, and on what evidence | `trust` `attest` `fault` `credit` `readjudicate` `model` |
+| **AI mount points (burn quota)** | decompose intent; independent acceptance | `decompose` `judge` |
+| External and self-heal | how other systems call in, what to do when an executor dies, how the sister-repo agent-runtime actually runs | `api` `revive` `harness-run` |
 
-**每个命令的参数与「什么时候用」→ [[cortex-loop/references/commands|references/commands.md]]**
+**Arguments and "when to use" for every command are in [[cortex-loop/references/commands|references/commands.md]]**
 
 ---
 
-## ⚡ 置顶铁律 T1–T11（动手前必读 · 违反即返工）
+## ⚡ Pinned hard rules T1–T11 (read before touching anything · a violation is rework)
 
-> 不是"最佳实践"，是从 15 条 ERRORS 里反复现形的**同几个根因**。靠人记必然复发，所以每条都配机械门。
-> T1–T6 立于 2026-07-28（`c858a9ef9`）；T7–T9 立于 2026-07-29（三态判断 / 跨机传播 / 信任计分）。
-> **每条被什么代价换来的（踩坑 + commit + ERRORS 编号）→ [[cortex-loop/references/tenets|references/tenets.md]]**
+> These are not "best practices". They are **the same few root causes** that kept reappearing across 15 ERRORS entries. Relying on memory guarantees a relapse, so each rule has a mechanical gate.
+> T1–T6 were set on 2026-07-28 (`c858a9ef9`); T7–T9 were set on 2026-07-29 (three-state judgment / cross-machine propagation / trust scoring).
+> **What each rule cost (the pitfall + commit + ERRORS id) is in [[cortex-loop/references/tenets|references/tenets.md]]**
 
-| # | 铁律 | 机械门 |
+| # | Hard rule | Mechanical gate |
 |---|------|--------|
-| **T1** | **Runtime 无关**：引擎不认识任何具体 runtime，能力/需求由 adapter **自声明** | `env-parity.sh` 读 `# cortex-loop:requires-env` |
-| **T2** | **跨环境一致性**：交互式 shell 能跑 ≠ 无人值守能跑 | `bash bin/cortex-loop-tests/env-parity.sh` |
-| **T3** | **失败关闭，不是失败开放**：验证器自己没跑起来 ≠ 内容通过 | `ai_judge` 见 `[ADAPTER_FAILED]`/空输出直接 REJECT |
-| **T4** | **判据要问「这一条具体的事变了没」**，不是「重跑会不会报错」 | `short_test` 用否定判据 `! (<扫描器> \| grep -qF <具体项>)` |
-| **T5** | **静默降级比报错更危险**：任何"降级/退回/兜底"必须出声 | 退回快照必告警；push 失败打 stderr；非零退出加 `[ADAPTER_FAILED]` |
-| **T6** | **占位符 `-` 是合法值不是路径** | `fit_score`/`covenant_check`/三道机械门均已加例外 |
-| **T7** | **三态不是二态**：「查不到」独立于「没有」，**UNKNOWN 绝不倒向任何一边** | `dimensional-collapse-scan.sh`（已接入 suite）· 探针退出码 0/1/**2** |
-| **T8** | **完成 = 传播到别人看得见的地方**：只躺本机磁盘的产出不算完成 | 传播门 v2：查 artifact **是否进了 origin 可达的历史** |
-| **T9** | **信任只能由真实变化换来**：判据本就满足的重跑 = 空转，不加分不扣分 | 空转门在烧额度前拦 + 第四态 `moot` 独立命名空间 + 查验强度按信任分档 |
-| **T10** | **“模型回了文字”不等于“任务被执行”**：自动 executor 必须有 Read/Edit/Write/Bash 工具层，且任务合同、状态、short_test 由引擎保护 | `cheap-tool-smoke.sh` 真 Write+Read · task/short_test guard · worker 单实例锁 |
-| **T11** | **进程边界不能靠 PATH 与模式猜**：自动化禁用 `pkill`；查询显式 `/usr/bin/pgrep`；终止只认创建者记录并校验的确切 PID | suite H33/H34 · `verify-process-tool-safety.py` |
+| **T1** | **Runtime-agnostic**: the engine knows no concrete runtime. Capability and requirements are **self-declared** by the adapter | `env-parity.sh` reads `# cortex-loop:requires-env` |
+| **T2** | **Cross-environment parity**: an interactive shell can run it does not mean unattended can run it | `bash bin/cortex-loop-tests/env-parity.sh` |
+| **T3** | **Fail closed, not fail open**: the verifier itself failing to run is not content passing | `ai_judge` sees `[ADAPTER_FAILED]` or empty output and REJECTs immediately |
+| **T4** | **A criterion must ask "did this specific thing change"**, not "will a rerun report an error" | `short_test` uses a negative criterion `! (<scanner> \| grep -qF <specific item>)` |
+| **T5** | **Silent degradation is more dangerous than an error**: every "degrade / fall back / catch-all" must make a sound | falling back to a snapshot must warn; a push failure goes to stderr; a non-zero exit adds `[ADAPTER_FAILED]` |
+| **T6** | **The placeholder `-` is a legal value, not a path** | `fit_score` / `covenant_check` / the three mechanical gates all have the exception |
+| **T7** | **Three states, not two**: "cannot tell" is independent of "absent". **UNKNOWN never collapses toward either side** | `dimensional-collapse-scan.sh` (wired into the suite) · probe exit codes 0/1/**2** |
+| **T8** | **Done means propagated to a place others can see**: output that only sits on the local disk is not done | propagation gate v2: check whether the artifact **is in history reachable from origin** |
+| **T9** | **Trust can be bought only with a real change**: rerunning a task whose criterion was already met is a no-op. No points added, no points removed | the no-op gate blocks before quota is burned + the fourth state `moot` has its own namespace + inspection intensity is tiered by trust |
+| **T10** | **"The model returned text" is not "the task was executed"**: an automatic executor must have a Read/Edit/Write/Bash tool layer, and the task contract, status, and short_test are protected by the engine | `cheap-tool-smoke.sh` real Write+Read · task/short_test guard · worker single-instance lock |
+| **T11** | **Process boundaries cannot be guessed from PATH or from a pattern**: automation must not use `pkill`; queries use explicit `/usr/bin/pgrep`; termination accepts only the creator's record and checks the exact PID | suite H33/H34 · `verify-process-tool-safety.py` |
 
-**一键自检**：`bash bin/cortex-loop-tests/env-parity.sh && bash bin/cortex-loop-tests/suite.sh`
-（suite 内含 8 个负向测试 `fixtures/negtest-*.py`，每个都经破坏性验证「真的会红」）
+**One-shot self-check**: `bash bin/cortex-loop-tests/env-parity.sh && bash bin/cortex-loop-tests/suite.sh`
+(the suite contains 8 negative tests `fixtures/negtest-*.py`, each proven by a destructive check to "actually go red")
 
 ---
 
-## 🔧 工具箱：五件套 + 两个辅助（先查工具，别手搓）
+## 🔧 Toolbox: five tools + two helpers (look up the tool first; do not hand-roll)
 
-> **搓错过一次的命令优先级最高，它已证明会再骗人一次**（[[atomize-tools-doctrine|ATOMIZE 律]]）。
-> 五个工具**正交不重叠**，各答一个不同的问题。
+> **A command that has fooled you once has the highest priority. It has already proved it will fool you again** ([[atomize-tools-doctrine|ATOMIZE law]]).
+> The five tools are **orthogonal and do not overlap**. Each answers a different question.
 
-| 工具 | 答什么问题 | 关键用法 |
+| Tool | What question it answers | Key use |
 |------|-----------|---------|
-| `bin/cortex-probe.sh` | **单点：这一件事是 YES 还是 NO？**（被动，问了才答） | `list` 看 10 个探针；退出码 0=YES / 1=NO / **2=UNKNOWN** |
-| `bin/system-load-alert.sh` | **CPU 过载主动告警**（跟磁盘不够会告警同思路，不用等人去问）| 复用 `cortex-probe.sh system-load-pressure`；launchd 每 5 分钟探测；**同一过载段企微只一次**，恢复要连续约 30 分钟才算、不发「已恢复」（防 5 分钟翻转刷屏，见 git-management ERRORS §4.5）；detect-only，不能变出更多 CPU |
-| `bin/cortex-trace.sh` | **为什么：这个判断是怎么来的？** | `state` `clocks` `wiring` `chain ci` `task <id>` `history [天]` |
-| `bin/cortex-dashboard.sh` | **此刻：一屏看完健康/任务/CI/目标** | 裸跑 · `--json` 机读 · `--watch` 常驻 · `--md <路径>` 写 living md |
-| `bin/cortex-pulse.sh` | **趋势：比上次差了没？** | 退出码 0=健康 / 1=有红项 / **2=比上次退化** |
-| `bin/cortex-ci.sh` | **还是不是原来那个东西？（防跑偏）** | 退出码 0=全绿 / 1=有失败 / **2=目标被改松**（比测试失败更严重） |
+| `bin/cortex-probe.sh` | **One point: is this one thing YES or NO?** (passive; it answers only when asked) | `list` shows 10 probes; exit 0=YES / 1=NO / **2=UNKNOWN** |
+| `bin/system-load-alert.sh` | **Active alert on CPU overload** (same idea as alerting when disk is low; do not wait for someone to ask) | reuses `cortex-probe.sh system-load-pressure`; launchd probes every 5 minutes; **WeCom fires once per overload episode**; recovery counts only after about 30 continuous minutes and does not send "recovered" (prevents a 5-minute flap from flooding the channel; see git-management ERRORS §4.5); detect-only, it cannot conjure more CPU |
+| `bin/cortex-trace.sh` | **Why: how was this judgment reached?** | `state` `clocks` `wiring` `chain ci` `task <id>` `history [days]` |
+| `bin/cortex-dashboard.sh` | **Right now: health / tasks / CI / goals on one screen** | bare run · `--json` machine-readable · `--watch` resident · `--md <path>` writes a living md |
+| `bin/cortex-pulse.sh` | **Trend: worse than last time?** | exit 0=healthy / 1=red items / **2=regressed since last time** |
+| `bin/cortex-ci.sh` | **Is this still the same thing? (stop drift)** | exit 0=all green / 1=failures / **2=a goal was loosened** (more serious than a test failure) |
 
-**pulse 与 ci 的区别不是频率，是问题**：pulse 问「今天健不健康」，ci 问「**还是不是原来那个东西**」——
-系统完全可以**很健康地跑偏**（指标全绿，门被悄悄放宽）。
-**辅助两件**：`bin/cortex-loop-detach.sh <名> "<命令>"`（长跑挂 tmux，会话崩溃不连坐 · E010）·
-`bin/cortex-loop-mcp.py`（对外 MCP 出口，与 `cortex-loop api` 共用同一道六定律门）。
+**The difference between pulse and ci is the question, not the frequency**: pulse asks "is it healthy today"; ci asks "**is this still the same thing**" —
+a system can **drift while looking perfectly healthy** (metrics all green, a gate quietly widened).
+**Two helpers**: `bin/cortex-loop-detach.sh <name> "<command>"` (long runs hang in tmux; a session crash does not take them down · E010) ·
+`bin/cortex-loop-mcp.py` (external MCP exit; shares the same six-law gate as `cortex-loop api`).
 
-## ⏰ 三个时钟（launchd · 职责正交）
+## ⏰ Three clocks (launchd · duties are orthogonal)
 
-| 时钟 | 周期 | 干什么 |
+| Clock | Period | What it does |
 |------|------|--------|
-| `com.cortex.loop` | **900s** | **推进**任务（做事） |
-| `com.cortex.pulse` | **3600s** | **体检**健康趋势（P·U·L·S·E 五问） |
-| `com.cortex.ci` | **每天 09:30** | **约束**不跑偏（全套测试 + 目标锚定） |
+| `com.cortex.loop` | **900s** | **advances** tasks (does the work) |
+| `com.cortex.pulse` | **3600s** | **checks** the health trend (the five P·U·L·S·E questions) |
+| `com.cortex.ci` | **every day at 09:30** | **constrains** drift (full test suite + goal anchor) |
 
-plist 在 `work-studio/devops/dotfiles/launchd/`。**核对实况**：`bash bin/cortex-trace.sh clocks` · `bin/cortex-loop reconcile`（声明 vs 实际，脱钩报 DRIFT）。
+Plists live in `work-studio/devops/dotfiles/launchd/`. **Check the live state**: `bash bin/cortex-trace.sh clocks` · `bin/cortex-loop reconcile` (declaration vs reality; a split reports DRIFT).
 
 ---
 
 ## When to Use / When NOT to Use
 
-| ✅ 该用 | 为什么 |
+| ✅ Use it | Why |
 |---------|--------|
-| 一件事「只要没人想起就永久停在原地」 | 这正是心跳要解的病 |
-| 方向线要自动推进且**完成必须机械可验** | artifact + short_test + 传播门 三验，AI 说完成不算数 |
-| 要查「声明部署了但实际没在跑」 | `reconcile` 把名实分裂从文档纪律升级为机器红灯 |
-| 多机协作：判谁在线/谁接管、一个计划被多台机自主认领并汇总 | `swarm`/`sync`/`lease`/`caps` · `plan`→`claim`→`run`→`result`→`gather`（无 leader） |
-| 会话被掐断后要有人接着做 | `stall_min` 收回重推 |
-| 想知道系统健不健康 / 凭什么这么判 | dashboard + trace + `cortex-loop why` |
-| 要判「有没有 / 成没成」而手边只有一条会骗人的命令 | `bin/cortex-probe.sh`（三态，UNKNOWN 不倒向 NO） |
-| 代码实现 / 多文件改动 / 高风险任务要自动推进 | 先立 `success_criteria` + `short_test`，再派执行体；主线程只集成与验证——完整 4 条默认动作见 [[agent-code-gauntlet\|aboutme/methods/agent-code-gauntlet]]（2026-08-02 立） |
+| A thing "stays stopped forever unless someone remembers it" | this is exactly the disease the heartbeat exists to cure |
+| A direction line should advance automatically and **completion must be mechanically checkable** | artifact + short_test + propagation gate, three checks; AI saying done does not count |
+| You need to catch "declared deployed but not actually running" | `reconcile` upgrades a name/reality split from a documentation discipline to a machine red light |
+| Multi-machine work: who is online, who takes over, one plan claimed autonomously by many machines and then gathered | `swarm`/`sync`/`lease`/`caps` · `plan`→`claim`→`run`→`result`→`gather` (no leader) |
+| Someone has to pick the work up after a session is cut | `stall_min` reclaims and re-pushes |
+| You want to know whether the system is healthy, and on what evidence | dashboard + trace + `cortex-loop why` |
+| You need to judge "is it there / did it succeed" and the only command at hand is one that lies | `bin/cortex-probe.sh` (three-state; UNKNOWN does not collapse to NO) |
+| Code, a multi-file change, or a high-risk task should advance automatically | set `success_criteria` + `short_test` first, then dispatch an executor; the main thread only integrates and verifies — the full 4 default actions are in [[agent-code-gauntlet\|aboutme/methods/agent-code-gauntlet]] (set 2026-08-02) |
 
-| ❌ 不该用 | 用什么替代 |
+| ❌ Do not use it | Use this instead |
 |-----------|-----------|
-| 一次性任务、需要人拍板的战略决策 | 直接做 / `/hive`；环不发明目标，战略目标歧义只澄清一次 |
-| 完成标准说不清、无法写 `short_test` | 先用一次澄清冻结标准；同时完成已授权诊断并继续独立 DAG 分支 |
-| 想让主线程承担长流程执行 / 多文件实现 | 走 HIVE / sub-agent / worker；主线程默认不做执行体 |
-| 想在 tick 里顺手做形态升级（脚本→Skill） | **禁止在 tick 内 `transform-emit`**，走 REAP / detect-* 事后路径 |
-| 想靠调低 tick 频率省额度 | 错方向。防雪崩靠 `advance_window_min` + `max_advance_per_day` |
-| 想手搓一条命令判「有没有」 | 先 `bin/cortex-probe.sh list` 看有没有现成探针 |
-| 想改门/改目标让指标好看 | `CHARTER-SWARM.out_of_scope` 明写禁止；`cortex-ci.sh` 退出码 **2** 专抓这个 |
+| A one-shot task, or a strategic decision that needs a human call | do it directly / `/hive`; the loop does not invent goals, and a strategic goal ambiguity is clarified only once |
+| The completion bar cannot be stated and a `short_test` cannot be written | freeze the bar with one clarification; at the same time finish authorized diagnosis and continue independent DAG branches |
+| You want the main thread to carry a long execution flow or a multi-file implementation | use HIVE / sub-agent / worker; the main thread is not an executor by default |
+| You want to upgrade form inside a tick (script → Skill) | **`transform-emit` is forbidden inside a tick**; use the REAP / detect-* after-the-fact path |
+| You want to save quota by lowering the tick frequency | wrong direction. Avalanche protection is `advance_window_min` + `max_advance_per_day` |
+| You want to hand-roll a command that judges "is it there" | `bin/cortex-probe.sh list` first, to see whether a probe already exists |
+| You want to change a gate or a goal so the metrics look better | `CHARTER-SWARM.out_of_scope` states the prohibition in writing; `cortex-ci.sh` exit code **2** exists to catch this |
 
-## 自主推进与收口绑定（复用 AGENT-CORE §3.2）
+## Autonomous advance bound to closeout (reuse AGENT-CORE §3.2)
 
-本 Skill 不另定义 autonomy、approval 或 completion 政策。命令映射为：
-`task-run` 在授权范围内自动推进，`task-hold` 仅记录真实外部 blocker，
-`task-retry`/`task-reopen` 携带 repair/replay next action，`try-complete`
-是唯一写 `done` 的机械门。`task-add` 冻结 success criteria、short test、
-owned scope 和 verifier；完成证据由非作者复跑（可由 Guardian 执行）与机器
-证据共同提供，按任务类型判断新鲜度。失败只挂起受影响依赖，独立 DAG 继续；
-失败 settlement 必须保留 `first_blocker` 与 `repair/replay_next_action`；Harness
-映射保持 `M1 → M3 → M2`，失败走 `M1_REPLAY → M3 → M2`。
+This Skill does not define a separate autonomy, approval, or completion policy. The command mapping is:
+`task-run` advances automatically inside the authorized range, `task-hold` only records a real external blocker,
+`task-retry` / `task-reopen` carry a repair/replay next action, and `try-complete`
+is the only mechanical gate that writes `done`. `task-add` freezes success criteria, the short test,
+owned scope, and the verifier. Completion evidence is supplied jointly by a non-author rerun (Guardian may execute it) and by machine
+evidence, with freshness judged by task type. A failure suspends only the affected dependencies; the independent DAG continues.
+Failure settlement must keep `first_blocker` and `repair/replay_next_action`. The Harness
+mapping stays `M1 → M3 → M2`; failure takes `M1_REPLAY → M3 → M2`.
 
-## 最常用命令
+## Most-used commands
 
 ```bash
-bin/cortex-loop tick [--auto]        # 看什么到期 / 真推进（launchd 每 900s 跑 --auto）
+bin/cortex-loop tick [--auto]        # see what is due / actually advance (launchd runs --auto every 900s)
 bin/cortex-loop task-list --line cortex-immune --json
 bin/cortex-loop task-show --line cortex-immune --task T18
 bin/cortex-loop task-add --line X --title ... --success-criteria ... --failure-modes ... --artifact-paths ... --short-test ...
-bin/cortex-loop task-retry --line X --task T --reason "根因已修"
-bin/cortex-loop task-hold --line X --task T --status waiting_external --reason "等待明确外部授权"
-bin/cortex-loop task-resume --line X --task T --reason "授权已取得"
-bin/cortex-loop task-reopen --line X --task T --reason "短测只验文档，实际功能未接"
-bin/cortex-loop task-run --line X --task T       # 精确走 claim→工具执行→完成门
-bin/cortex-loop health && bin/cortex-loop reconcile   # 地基自检 + 声明vs实际（脱钩报 DRIFT）
-bin/cortex-loop try-complete --line loop-ops --task T2   # 唯一能写 done
-bin/cortex-loop swarm / trust / why / idle            # 谁在线 / 信任 / 凭什么 / 闲置率
-bin/cortex-loop harness-run --json                    # 真实驱动姊妹仓库 agent-runtime 跑一次（脚手架验证，非替代 tick）
-bash bin/cortex-dashboard.sh         # 一屏总览（--json 机读）
-bash bin/cortex-probe.sh list        # 10 个三态探针
-bash bin/cortex-loop-tests/suite.sh  # 全套测试
+bin/cortex-loop task-retry --line X --task T --reason "root cause fixed"
+bin/cortex-loop task-hold --line X --task T --status waiting_external --reason "waiting for explicit external authorization"
+bin/cortex-loop task-resume --line X --task T --reason "authorization obtained"
+bin/cortex-loop task-reopen --line X --task T --reason "short test only checked the doc; the real function is not wired"
+bin/cortex-loop task-run --line X --task T       # exact path claim → tool execution → completion gate
+bin/cortex-loop health && bin/cortex-loop reconcile   # foundation self-check + declaration vs reality (a split reports DRIFT)
+bin/cortex-loop try-complete --line loop-ops --task T2   # the only command that can write done
+bin/cortex-loop swarm / trust / why / idle            # who is online / trust / on what evidence / idle rate
+bin/cortex-loop harness-run --json                    # actually drive the sister-repo agent-runtime once (scaffold check, not a substitute for tick)
+bash bin/cortex-dashboard.sh         # one-screen overview (--json is machine-readable)
+bash bin/cortex-probe.sh list        # 10 three-state probes
+bash bin/cortex-loop-tests/suite.sh  # full test suite
 ```
 
-完整 cheatsheet → [[cortex-loop/references/operations|references/operations.md]]
+Full cheatsheet → [[cortex-loop/references/operations|references/operations.md]]
 
 ---
 
-## 按需加载索引（细节全在这几份，SKILL.md 不重复）
+## Load-on-demand index (the detail lives in these files; SKILL.md does not repeat it)
 
-| 文件 | 何时该读 |
+| File | When to read it |
 |------|---------|
-| [[cortex-loop/references/commands\|references/commands.md]] | 忘了某个子命令的参数 / 什么时候该用 |
-| [[cortex-loop/references/tenets\|references/tenets.md]] | 想知道 T1–T9 每条被什么代价换来的 |
-| [[cortex-loop/references/architecture\|references/architecture.md]] | 要改引擎行为 / 加门 / 调额度；问「为什么不直接让 AI 判完成」 |
-| [[cortex-loop/references/swarm\|references/swarm.md]] | 多机出问题（谁管这条线 / 判掉线 / 该不该接管）或要加机器 |
-| [[cortex-loop/references/contracts\|references/contracts.md]] | 要改 CLOCK / INTENT / TASKS / 节点画像字段；合同门报缺失 |
-| [[cortex-loop/references/operations\|references/operations.md]] | 新开方向线 / 装时钟 / 完整命令表 / 找相关文档 |
-| [[cortex-loop/EXPECTATIONS\|EXPECTATIONS.md]] | 问「还差什么 / 一直没做到什么 / 下一步攻哪」 |
-| [[cortex-loop/ERRORS\|ERRORS.md]] | 撞到诡异行为，先查已知母题；归一清理优先看 E031–E035 |
-| [[aboutme/methods/asset-evolve/red-flower-board\|红花榜]] | 人读正向激励。L4/L5 仍由本 Skill `credit`/`trust` 记分；榜不重记分 |
+| [[cortex-loop/references/commands\|references/commands.md]] | you forgot a subcommand's arguments, or when to use it |
+| [[cortex-loop/references/tenets\|references/tenets.md]] | you want the cost that bought each of T1–T9 |
+| [[cortex-loop/references/architecture\|references/architecture.md]] | you are changing engine behavior, adding a gate, or tuning quota; or someone asks "why not let AI judge completion directly" |
+| [[cortex-loop/references/swarm\|references/swarm.md]] | multi-machine trouble (who owns this line / how to judge offline / whether to take over) or you are adding a machine |
+| [[cortex-loop/references/contracts\|references/contracts.md]] | you are changing CLOCK / INTENT / TASKS / node-profile fields; a contract gate reports a missing field |
+| [[cortex-loop/references/operations\|references/operations.md]] | opening a new direction line, installing clocks, the full command table, or finding related docs |
+| [[cortex-loop/EXPECTATIONS\|EXPECTATIONS.md]] | "what is still missing / what we still have not done / where to push next" |
+| [[cortex-loop/ERRORS\|ERRORS.md]] | odd behavior; check the known root patterns first. Cleanup normalization starts at E031–E035 |
+| [[aboutme/methods/asset-evolve/red-flower-board\|red-flower board]] | human-readable positive incentive. L4/L5 scoring still belongs to this Skill's `credit` / `trust`; the board does not re-score |
 
 ---
 
-## 关联 Skills（双向索引）
+## Related skills (bidirectional index)
 
-**host（上游）** [[loop-engineering-hub/SKILL|loop-engineering-hub]] —— 选型「该用哪个 Loop」先到 hub。
-**同源** [[hive/SKILL|hive]]（`stall_min` 收回重推 = R·Resume 机械化）· [[epiplexity/SKILL|epiplexity]]（公理 1 = 验收员必须独立）。
-**配套** [[sub-agent-dispatch/SKILL|sub-agent-dispatch]]（复杂编排）· [[model-fingerprint/SKILL|model-fingerprint]](`attest` L-print 判据)。
-**邻接** [[cron/SKILL|cron]]（被 `health` 观测的对象，非心跳本体）· [[openclaw-master/SKILL|openclaw-master]]（改 job 走它）。
-**上游治理** [[evolve-ecosystem/SKILL|evolve-ecosystem]] —— 四合同 + 七 ref 命名空间注册在 Evolve 合同体系内。
-**体系架构总入口** [[cortex-architecture/SKILL|cortex-architecture]] —— 多栈晶格路由；loop 在 **C 执行/强制区**（心跳），Evolve 在 **B 知识边**；CLI `bash bin/cortex-architecture-map.sh hang loop`。
-**写代码任务默认标准** [[agent-code-gauntlet|aboutme/methods/agent-code-gauntlet]]（2026-08-02 立 · Uncle Bob Agent Code Gauntlet · 验收先于实现/本地门/高风险人闸/worktree 隔离；当前 L1 文档默认，L2 机械强制 backlog）。
-**ACP headless / 本地 Builder** [[acp-headless/SKILL]] —— 补丁合同与模型档位；L2 DECIDE 车道仍走兄弟 Recipe，不并入心跳引擎。
-**摸高薄路由** [[peak-compound-loop/SKILL|peak-compound-loop]] —— 「何时推进」判定通过后，ROUND_CLOSE 收口挂 PEAK + TaskOptimizer 摸高门，不替代本 Skill 的完成机械门。
+**host (upstream)** [[loop-engineering-hub/SKILL|loop-engineering-hub]] — to choose "which Loop to use", start at the hub.
+**Same origin** [[hive/SKILL|hive]] (`stall_min` reclaim-and-repush is R·Resume made mechanical) · [[epiplexity/SKILL|epiplexity]] (axiom 1 = the acceptor must be independent).
+**Companions** [[sub-agent-dispatch/SKILL|sub-agent-dispatch]] (complex orchestration) · [[model-fingerprint/SKILL|model-fingerprint]] (`attest` L-print criterion).
+**Adjacent** [[cron/SKILL|cron]] (an object observed by `health`, not the heartbeat itself) · [[openclaw-master/SKILL|openclaw-master]] (job edits go through it).
+**Upstream governance** [[evolve-ecosystem/SKILL|evolve-ecosystem]] — the four contracts and seven ref namespaces are registered inside the Evolve contract system.
+**Architecture front door** [[cortex-architecture/SKILL|cortex-architecture]] — multi-stack lattice routing; the loop sits in **zone C, execution / enforcement** (heartbeat), Evolve sits on **edge B, knowledge**; CLI `bash bin/cortex-architecture-map.sh hang loop`.
+**Default standard for code tasks** [[agent-code-gauntlet|aboutme/methods/agent-code-gauntlet]] (set 2026-08-02 · Uncle Bob Agent Code Gauntlet · acceptance before implementation / local gate / high-risk human gate / worktree isolation; currently an L1 documentation default, with L2 mechanical enforcement in the backlog).
+**ACP headless / local Builder** [[acp-headless/SKILL]] — patch contract and model tier; the L2 DECIDE lane still uses the sibling Recipe and is not folded into the heartbeat engine.
+**Thin peak-seeking route** [[peak-compound-loop/SKILL|peak-compound-loop]] — after the "when to advance" judgment passes, ROUND_CLOSE hangs the PEAK + TaskOptimizer peak gate. It does not replace this Skill's mechanical completion gate.
 
-## 关联 Layer 0 律（本 Skill 是它们的机械落地面）
+## Related Layer 0 laws (this Skill is their mechanical landing)
 
-> 2026-07-29 新增的六条律**全部诞生于本 Skill 的踩坑**，不是先有律再有实现。
-> **六律成链**（真相源 `rules/on-demand/ground-first-doctrine-guide.md` §11）：
-> [[ground-first-doctrine|GROUND]] 先查 → [[dimensional-expansion-doctrine|DIMENSIONAL]] 别压扁 → [[atomize-tools-doctrine|ATOMIZE]] 量具可靠 → [[glassbox-doctrine|GLASSBOX]] 人机双读 → [[steer-doctrine|STEER]] 循环推进 → [[pulse-doctrine|PULSE]] 定期自检
+> The six laws added on 2026-07-29 **were all born from pitfalls in this Skill**. The laws did not exist before the implementation.
+> **The six laws form a chain** (source of truth `rules/on-demand/ground-first-doctrine-guide.md` §11):
+> [[ground-first-doctrine|GROUND]] look first → [[dimensional-expansion-doctrine|DIMENSIONAL]] do not flatten → [[atomize-tools-doctrine|ATOMIZE]] measuring tools must be reliable → [[glassbox-doctrine|GLASSBOX]] human and machine read the same thing → [[steer-doctrine|STEER]] the loop keeps moving → [[pulse-doctrine|PULSE]] periodic self-check
 
-| 律 | 机械后盾（在本域） |
+| Law | Mechanical backing (in this domain) |
 |----|------------------|
-| [[ground-first-doctrine]] 先查现状再谈方向；查验强度随信任 | `cortex-loop fault --kind decision-dodge` · `inspection_mode()` |
-| [[dimensional-expansion-doctrine]] 状态别压成布尔（= T7） | `bin/cortex-loop-tests/dimensional-collapse-scan.sh` |
-| [[atomize-tools-doctrine]] 手搓第二次必须成工具，三态输出 | `bin/cortex-probe.sh`（10 探针） |
-| [[glassbox-doctrine]] 人机同读一份真相 | `bin/cortex-dashboard.sh --json` · `bin/cortex-trace.sh` |
-| [[steer-doctrine]] 主线程 = 决策者，每轮重新摸 | `orchestrator-*` 节点 + `checkin` / `credit` / `fault` |
-| [[pulse-doctrine]] 交付前五问，每问必带证据 | `bin/cortex-pulse.sh` · `autonomy-acceptance.sh` |
-| [[latch-doctrine]] 提醒对重复违规无效 → 建 Hook | pulse / ci 上时钟本身就是 LATCH 的产物 |
-| [[hive-doctrine]] R·Resume | `stall_min` 收回重推 |
+| [[ground-first-doctrine]] look at the present before talking about direction; inspection intensity follows trust | `cortex-loop fault --kind decision-dodge` · `inspection_mode()` |
+| [[dimensional-expansion-doctrine]] do not flatten state into a boolean (= T7) | `bin/cortex-loop-tests/dimensional-collapse-scan.sh` |
+| [[atomize-tools-doctrine]] the second hand-roll must become a tool; three-state output | `bin/cortex-probe.sh` (10 probes) |
+| [[glassbox-doctrine]] human and machine read one truth | `bin/cortex-dashboard.sh --json` · `bin/cortex-trace.sh` |
+| [[steer-doctrine]] the main thread is the decision-maker and re-feels every round | `orchestrator-*` node + `checkin` / `credit` / `fault` |
+| [[pulse-doctrine]] five questions before delivery, each with evidence | `bin/cortex-pulse.sh` · `autonomy-acceptance.sh` |
+| [[latch-doctrine]] a reminder does nothing against a repeated violation → build a Hook | putting pulse / ci on a clock is itself a LATCH product |
+| [[hive-doctrine]] R·Resume | `stall_min` reclaim and re-push |
 
 ---
 
-*v2.1.0（2026-07-29 按保安四问重组 + 细节下沉 references/）· 真相源 `bin/cortex-loop` · 总纲 [[cortex-loop-intent]]*
+*v2.1.0 (2026-07-29, reorganized around the four guard questions + detail sunk into references/) · source of truth `bin/cortex-loop` · charter [[cortex-loop-intent]]*
 
 ---
 
 <!-- cortex:map-backlink d-94388841c8da3735ac51e296 -->
-关联地图：[[skills/cortex-loop/MAP|Cortex Loop 全景地图]]
+Related map: [[skills/cortex-loop/MAP|Cortex Loop panorama]]

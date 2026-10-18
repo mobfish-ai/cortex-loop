@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""C11 — 租约 CAS：同 parent 两个 commit 推同一 ref，第二个必须被拒。
+"""C11 -- lease CAS: two commits with the same parent pushed to one ref; the second must be rejected.
 
-这是整个蜂群的防脑裂根基：网络分区时两个节点都会认为自己该接管，
-git 服务器的 fast-forward 检查是唯一裁决者（语义等价 Redis SETNX，但零外部依赖）。
-它一旦失效（比如有人给 push 加了 --force），两个节点会同时推进同一条线。
+This is the swarm's split-brain floor: during a partition both nodes think they should take over,
+and the git server's fast-forward check is the only judge (same meaning as Redis SETNX, with no extra dependency).
+If it fails (for example someone adds --force to push), two nodes advance the same line at once.
 
-隔离：只用 refs/swarm/test-<随机后缀>，绝不碰 refs/swarm/lease/*；
-跑完 push --delete 清远端 + update-ref -d 清本地。
+Isolation: only refs/swarm/test-<random suffix>, never refs/swarm/lease/*;
+cleanup is push --delete on the remote plus update-ref -d locally.
 
-抗抖：write_ref 的返回值把「被 CAS 拒」和「网络挂了」压成同一个 False（见报告 O-01），
-所以每次判「被拒」之前都用 ls-remote 反证网络是通的，网络问题则重试/SKIP，
-绝不把一次 SSL 抖动记成 CAS 生效。
+Jitter: write_ref collapses "rejected by CAS" and "network down" into the same False (see report O-01),
+so before judging "rejected" we prove the network is up with ls-remote. Network trouble retries or SKIPs,
+and one SSL blip is never recorded as CAS working.
 """
 
 import os
@@ -26,14 +26,14 @@ m = load()
 sfx = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(8))
 REF = "refs/swarm/test-cas-%s" % sfx
 LEASE_REF = "refs/swarm/test-lease-%s/testline" % sfx
-print("    测试命名空间：%s（绝不碰 refs/swarm/lease/*）" % REF)
+print("    test namespace: %s (never touch refs/swarm/lease/*)" % REF)
 
 
 def remote_sha(ref, tries=3):
-    """远端该 ref 指向哪。返回 None = 网络不通（跟「ref 不存在」返回空串区分开）。
+    """Where the remote ref points. None means the network is down (distinct from "ref missing", which is "").
 
-    连着 3 次够不着才认输：GitHub 走 Tailscale exit node 出境(2026-09-21 起，原 Privoxy 已退役)，单次 SSL_ERROR_SYSCALL 很常见，
-    一次抖动就判「网络挂了」会让 CAS 断言变成掷骰子。
+    Give up only after 3 misses in a row. GitHub egress goes through a Tailscale exit node (since 2026-09-21; the old proxy is retired), and a single SSL_ERROR_SYSCALL is common.
+    Treating one blip as "network down" would make the CAS assert a coin flip.
     """
     for _ in range(tries):
         code, out = m.git("ls-remote origin %s" % ref, timeout=120)
@@ -49,13 +49,13 @@ def net_down():
 
 
 def push_expect_ok(payload, parent, tries=3):
-    """期望成功的 push：只对网络失败重试，CAS 拒绝不重试。"""
+    """A push that should succeed: retry only network failures, never a CAS rejection."""
     for attempt in range(tries):
         ok, sha = m.write_ref(REF, payload, parent=parent)
         if ok:
             return True, sha
         if net_down():
-            print("    网络抖动，第 %d 次重试" % (attempt + 1))
+            print("    network blip, retry %d" % (attempt + 1))
             time.sleep(3)
             continue
         return False, sha
@@ -64,38 +64,38 @@ def push_expect_ok(payload, parent, tries=3):
 
 try:
     if net_down():
-        print("    SKIP：origin 不可达，CAS 用例无法真跑")
+        print("    SKIP: origin unreachable, the CAS case cannot really run")
         raise SystemExit(2)
 
     ok0, sha0 = push_expect_ok("holder=setup", None)
     if not ok0:
-        print("    SKIP：测试 ref 建不起来（凭据或权限问题），CAS 用例无法真跑")
+        print("    SKIP: the test ref cannot be created (credentials or permission), the CAS case cannot really run")
         raise SystemExit(2)
 
-    # 节点 A 与 节点 B 同时拿 sha0 当 parent —— 「同时抢」的精确复现
+    # Node A and node B both use sha0 as parent -- an exact replay of "racing at the same time"
     okA, shaA = push_expect_ok("holder=nodeA", sha0)
-    check("先到的节点 A 推成功", okA is True, "A 都推不上，后面无从谈起")
+    check("the first node A pushes successfully", okA is True, "if A cannot push, nothing after it matters")
 
     okB, shaB = m.write_ref(REF, "holder=nodeB", parent=sha0)
-    if not shaB:                      # 连 commit 都没造出来 = 本地 git 抖了，不是 CAS 拒绝
+    if not shaB:                      # no commit was created = local git blipped, not a CAS rejection
         okB, shaB = m.write_ref(REF, "holder=nodeB", parent=sha0)
     live = remote_sha(REF)
-    check("判 B 被拒时网络是通的（排除假阳性）", live is not None, "ls-remote 拿不到 → 网络挂了")
-    check("同 parent 的节点 B 被拒", okB is False, "B 也成功了 = CAS 失效，两节点会同时动同一条线")
-    check("远端停在赢家 A 上", live == shaA, "远端 %r 期望 %r" % (live, shaA))
-    check("A/B 是两个不同 commit（确实各造各的）", shaA != shaB)
+    check("the network is up when B is judged rejected (exclude a false positive)", live is not None, "ls-remote failed -> network down")
+    check("node B with the same parent is rejected", okB is False, "B also succeeded = CAS is dead, and both nodes would move one line")
+    check("the remote stays on winner A", live == shaA, "remote %r expected %r" % (live, shaA))
+    check("A and B are two different commits (each built its own)", shaA != shaB)
 
-    # 拿最新 parent 重试必须成功 —— 否则这不是锁，是死结
+    # Retrying with the latest parent must succeed -- otherwise this is a deadlock, not a lock
     okB2, shaB2 = push_expect_ok("holder=nodeB", shaA)
-    check("B 拿最新 parent 重试成功", okB2 is True, "重试也失败 = 锁变死结")
-    check("重试后远端换成 B", remote_sha(REF) == shaB2)
+    check("B succeeds when it retries with the latest parent", okB2 is True, "retry also failed = the lock is a deadlock")
+    check("after the retry the remote is B", remote_sha(REF) == shaB2)
 
-    # acquire_lease 层：租约有效期内别的节点抢不到
+    # acquire_lease layer: while the lease is valid, another node cannot take it
     m.LEASE_NS = "refs/swarm/test-lease-%s" % sfx
 
     def lease_expect_ok(node, tries=3):
-        """期望抢到的场景。抢不到的原因可能是上一次 fetch 抖掉了（本地 ref 过期 →
-        parent 陈旧 → 被拒），重试一次就好；所以这里只对「期望成功」的调用重试。"""
+        """A case that should acquire the lease. A miss can be a dropped fetch (local ref stale ->
+        parent stale -> rejected); one retry is enough. Retry only calls that are expected to succeed."""
         os.environ["CORTEX_NODE"] = node
         got, why = False, ""
         for _ in range(tries):
@@ -106,22 +106,22 @@ try:
         return got, why
 
     got1, why1 = lease_expect_ok("node-first")
-    check("首个节点拿到租约", got1 is True, why1)
+    check("the first node gets the lease", got1 is True, why1)
 
     os.environ["CORTEX_NODE"] = "node-second"
     got2, why2 = m.acquire_lease("testline", ttl_min=60)
-    check("判第二个节点抢不到时网络是通的", remote_sha(LEASE_REF) is not None, "网络挂了")
-    check("租约未到期时第二个节点拿不到", got2 is False, why2)
-    check("拒绝理由点名持有者", "node-first" in why2, "实际 %r" % why2)
+    check("the network is up when the second node is judged unable to take the lease", remote_sha(LEASE_REF) is not None, "network down")
+    check("the second node cannot take an unexpired lease", got2 is False, why2)
+    check("the refusal names the holder", "node-first" in why2, "actual %r" % why2)
 
-    # 过期租约必须能被接手，否则一个节点挂掉就把线永久锁死
+    # An expired lease must be takeable, or one dead node locks the line forever
     expired = "holder=node-first\nexpires=%s\nsince=%s" % (
         m.fmt(m.now() - m.timedelta(minutes=5)), m.fmt(m.now() - m.timedelta(minutes=65)))
     okE, _ = m.write_ref(LEASE_REF, expired, parent=remote_sha(LEASE_REF) or None)
-    check("能造出一个已过期的租约", okE is True, "写不进测试 ref")
+    check("an already-expired lease can be written", okE is True, "could not write the test ref")
     if okE:
         got3, why3 = lease_expect_ok("node-second")
-        check("租约过期后可被别的节点接手", got3 is True, why3)
+        check("after expiry another node can take the lease", got3 is True, why3)
 finally:
     for ref in (REF, LEASE_REF):
         m.git("push origin --delete %s 2>&1" % ref, timeout=180)
@@ -129,8 +129,8 @@ finally:
     left = m.git("ls-remote origin 'refs/swarm/test-*'", timeout=120)[1].strip()
     local = m.git("for-each-ref --format='%(refname)' refs/swarm/")[1]
     local_test = [r for r in local.split("\n") if "test-" in r]
-    print("    清理：远端 %s ｜ 本地 %s"
-          % ("已删净" if sfx not in left else "⚠️ 残留 %s" % left,
-             "已删净" if not local_test else "⚠️ 残留 %s" % local_test))
+    print("    cleanup: remote %s | local %s"
+          % ("cleared" if sfx not in left else "WARNING left %s" % left,
+             "cleared" if not local_test else "WARNING left %s" % local_test))
 
 finish()

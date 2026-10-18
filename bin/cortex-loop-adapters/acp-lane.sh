@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# cortex-loop adapter: acp-lane — L2 headless 策略 lane（Grok-first + DECIDE 续跑）
+# cortex-loop adapter: acp-lane — L2 headless strategy lane (Grok-first + DECIDE resume)
 #
-# 约定接口（与 cheap/claude adapter 同构）：
-#   $1 = 提示词文件
-#   $2 = 结果文件
-#   --check-ready  → 就绪探测（exit 0=可用）
+# Contract (same shape as the cheap/claude adapters):
+#   $1 = prompt file
+#   $2 = result file
+#   --check-ready  → readiness probe (exit 0 = usable)
 #
-# 提示词文件可选头：
+# Optional prompt-file header:
 #   topic=<id>
 #   backend=grok
-#   cwd=/tmp/clean-or-scratch   # 禁止 ob1 根
+#   cwd=/tmp/clean-or-scratch   # ob1 root forbidden
 #   simulate=1
 #   ---
-#   <正文>
+#   <body>
 #
-# 调度挂点：
-#   - CLOCK executor=acp-lane（整线）
-#   - 或任务 requires_executor=acp-lane（单任务，优先于 CLOCK）
-#   - 引擎：resolve_task_executor + render_prompt 注入头字段
+# Dispatch hooks:
+#   - CLOCK executor=acp-lane (whole line)
+#   - or task requires_executor=acp-lane (one task, ahead of CLOCK)
+#   - engine: resolve_task_executor + render_prompt injects the header fields
 #
-# 安全：默认 cwd=/tmp/grok-scratch；client 内二次拦截 vault 根
+# Safety: default cwd=/tmp/grok-scratch; the client blocks the vault root a second time
 set -uo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
@@ -35,7 +35,7 @@ if [[ "${1:-}" == "--check-ready" ]]; then
     printf 'acp-policy-client-not-invokable\n' >&2
     exit 127
   fi
-  # dry-run 不烧模型，只证明 client 可启动
+  # dry-run spends no model; it only proves the client can start
   out=$(bash "$CLIENT" dry-run --topic adapter-ready --backend grok --prompt "ping" 2>/dev/null) || true
   st=$(printf '%s' "$out" | python3 -c 'import sys,json
 try:
@@ -65,7 +65,7 @@ SIM="$(sed -n 's/^simulate=//p' "$PROMPT_FILE" 2>/dev/null | head -1)"
 TOPIC="${TOPIC:-acp-loop}"
 BACKEND="${BACKEND:-${CORTEX_ACP_BACKEND:-grok}}"
 CWD="${CWD:-${CORTEX_ACP_CWD:-/tmp/grok-scratch}}"
-# vault 根禁止
+# vault root forbidden
 if [[ "$(cd "$CWD" 2>/dev/null && pwd -P)" == "$(cd "$OB1_ROOT" && pwd -P)" ]]; then
   CWD="/tmp/grok-scratch"
 fi
@@ -73,7 +73,7 @@ if [[ "${CORTEX_ACP_SIMULATE:-}" == "1" || "${CORTEX_ACP_SIMULATE:-}" == "true" 
   SIM=1
 fi
 
-# 正文：首个 --- 之后，否则全文
+# Body: after the first ---, otherwise the whole file
 BODY=$(awk 'BEGIN{p=0} /^---$/{p=1;next} p{print}' "$PROMPT_FILE")
 if [ -z "$BODY" ]; then
   BODY=$(cat "$PROMPT_FILE")
@@ -93,7 +93,7 @@ SPOT="/tmp/spotlight/acp-lane-$(date +%s)-$$.log"
 
 args=( run --topic "$TOPIC" --backend "$BACKEND" --cwd "$CWD" --prompt "$BODY" )
 if [ "$SIM" = "1" ] || [ "$SIM" = "true" ]; then
-  args+=( --simulate --simulate-replies $'模拟 adapter 完成。\n证据路径已写入。\n' )
+  args+=( --simulate --simulate-replies $'Simulated adapter finished.\nEvidence path written.\n' )
 fi
 
 set +e
@@ -112,7 +112,7 @@ set -e
   echo "spotlight=$SPOT"
   echo "client_json=$out"
   echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  # usage 占位：无 token 时标 UNKNOWN（IMM-T45 能量字段纪律）
+  # usage placeholder: mark UNKNOWN when there are no tokens (IMM-T45 energy-field rule)
   echo "[usage] input_tokens=UNKNOWN output_tokens=UNKNOWN source=acp-lane"
 } > "$RESULT_FILE"
 

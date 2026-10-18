@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B1 杀手负测：done 必须是可追溯的 run receipt，不能靠 CLI 或本地幻象伪造。"""
+"""B1 killer negative test: done must be a traceable run receipt, not a CLI or local illusion."""
 import contextlib
 import importlib.machinery
 import importlib.util
@@ -36,7 +36,7 @@ def forged_gather_must_fail():
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             rc = cl.cmd_gather(SimpleNamespace(plan="forged", settle=False))
-        check("forged done receipt blocks gather", rc == 1 and "receipt 无效" in buf.getvalue(),
+        check("forged done receipt blocks gather", rc == 1 and "receipt invalid" in buf.getvalue(),
               buf.getvalue())
     finally:
         for name, value in saved.items():
@@ -59,9 +59,9 @@ def run_fixture(task, write_ref, origin_reachable=None, run_fn=None):
         cl.read_ref = lambda ref: "holder=node-a\nsince=2026-07-30T00:00\nexpires=2099-01-01T00:00" if "/claim/" in ref else ""
         cl.fit_score = lambda *_args: (1, "ok")
         cl.covenant_check = lambda *_args: (True, "", "")
-        cl.run_adapter = lambda *_args, **_kwargs: "执行文本不能直接变 done"
+        cl.run_adapter = lambda *_args, **_kwargs: "execution text cannot directly become done"
         cl.run = run_fn or (lambda command, **_kwargs: (0, "commit") if "git log -1 --oneline" in command else (0, ""))
-        cl.inspection_mode = lambda _node: ("免检", False, False)
+        cl.inspection_mode = lambda _node: ("exempt", False, False)
         cl.verify_value = lambda *_args: ("V1", "")
         cl.haas_score = lambda _node: (0.9, {})
         cl.write_ref = write_ref
@@ -88,8 +88,8 @@ def result_write_failure_is_unknown():
     def write_ref(ref, *_args, **_kwargs):
         return (True, "claim-sha") if "/claim/" in ref else (False, "ERROR")
     out, progress = run_fixture(task, write_ref, run_fn=run_fn)
-    check("result ref write failure does not progress", progress == 0 and "receipt 未写入" in out
-          and "→ done" not in out, out)
+    check("result ref write failure does not progress", progress == 0 and "receipt was not written" in out
+          and "-> done" not in out, out)
 
 
 def successful_receipt_carries_world_evidence():
@@ -109,7 +109,7 @@ def successful_receipt_carries_world_evidence():
     )
     receipt = payloads[0] if payloads else ""
     check("done receipt writes replayable world evidence",
-          progress == 1 and "→ done" in out and "verification_command=true" in receipt
+          progress == 1 and "-> done" in out and "verification_command=true" in receipt
           and "world_verified_at=-" not in receipt and "world_verified_at=20" in receipt,
           receipt or out)
 
@@ -135,7 +135,7 @@ def local_only_artifact_must_fail():
             task,
             lambda ref, payload, **_kwargs: ((True, "claim-sha") if "/claim/" in ref
                                                else (payloads.append(payload) or True, "sha")),
-            lambda _artifact: (False, "产出提交尚未进入 origin 可达历史"),
+            lambda _artifact: (False, "artifact commit is not yet in origin reachable history"),
             run_fn,
         )
     finally:
@@ -150,7 +150,7 @@ def direct_result_is_rejected():
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         rc = cl.cmd_result(SimpleNamespace(plan="p", task="T", status="done", artifact="-"))
-    check("direct result done is rejected", rc == 2 and "拒绝直接 result" in buf.getvalue(), buf.getvalue())
+    check("direct result done is rejected", rc == 2 and "refusing a direct result" in buf.getvalue(), buf.getvalue())
 
 
 def plan_source_is_preserved():
@@ -219,7 +219,7 @@ def gather_rechecks_current_origin():
         receipt = valid_receipt(artifact="artifacts/x.md", origin_commit="a" * 40)
         cl.read_ref = lambda ref: ("\n".join("%s=%s" % item for item in receipt.items())
                                    if "/result/" in ref else "holder=node-a")
-        cl.commit_origin_reachable = lambda _commit: (False, "origin UNKNOWN：离线")
+        cl.commit_origin_reachable = lambda _commit: (False, "origin UNKNOWN: offline")
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             rc = cl.cmd_gather(SimpleNamespace(plan="p", settle=True))

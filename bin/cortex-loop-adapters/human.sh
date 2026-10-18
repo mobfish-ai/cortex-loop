@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# cortex-loop adapter: human — 安全默认值（不烧 token、不产生副作用）
-# 约定接口：$1=提示词文件  $2=结果文件；退出码 0=已交付给执行者
+# cortex-loop adapter: human — safe default (spends no tokens, causes no side effects)
+# Contract: $1=prompt file  $2=result file; exit code 0=delivered to the executor
 set -euo pipefail
 PROMPT="$1"; RESULT="$2"
 INBOX="/tmp/spotlight/cortex-loop-human-inbox.md"
 
 {
-  echo "## $(date '+%Y-%m-%d %H:%M') 待人工执行"
+  echo "## $(date '+%Y-%m-%d %H:%M') awaiting human execution"
   echo
   cat "$PROMPT"
   echo
@@ -15,8 +15,8 @@ INBOX="/tmp/spotlight/cortex-loop-human-inbox.md"
 
 cat > "$RESULT" <<EOF
 executor=human
-本轮未自动执行：CLOCK.md 里该线 executor=human（安全默认）。
-提示词已投递到 ${INBOX}，等人工执行。
-改成自动请把该线 executor 改为 claude / codex / openclaw。
+This round did not run automatically: this line's executor=human in CLOCK.md (safe default).
+Prompt delivered to ${INBOX}; waiting for a human to run it.
+To automate, change this line's executor to claude / codex / openclaw.
 EOF
-echo "human adapter: 已投递 $INBOX"
+echo "human adapter: delivered $INBOX"

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# 清理僵尸 tick / 死锁文件 — 2026-07-31 血泪：旧 tick 占锁 1h+，task-add 全 BUSY。
+# Clear zombie ticks / deadlock files -- 2026-07-31 lesson: an old tick held the lock 1h+ and every task-add was BUSY.
 #
-# 三态退出：0=已清理或本来干净  1=需要 --force 但未给  2=探不清
-# 默认只清「死 pid 锁」；活进程超龄需 --force（会 SIGTERM tick 组）
+# Three-state exit: 0=cleaned or already clean  1=needs --force but it was not given  2=could not tell
+# Default: only clear dead-pid locks; a live process past max age needs --force (SIGTERM the tick group)
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT" || exit 2
@@ -15,7 +15,7 @@ while [ $# -gt 0 ]; do
     --max-min) MAX_MIN="${2:?}"; shift 2 ;;
     -h|--help)
       echo "usage: $0 [--force] [--max-min N]"
-      echo "  默认：清死 pid 锁；--force：杀超龄 tick 进程"
+      echo "  default: clear dead-pid locks; --force: kill over-age tick processes"
       exit 0 ;;
     *) echo "unknown: $1" >&2; exit 2 ;;
   esac
@@ -27,7 +27,7 @@ bash bin/cortex-probe.sh tick-not-zombie "$MAX_MIN"; rc_zom=$?
 
 cleaned=0
 if [ $rc_lock -eq 0 ]; then
-  # YES lock free — 若文件在但死 pid，probe 也 YES
+  # YES lock free -- if the file exists but the pid is dead, the probe is still YES
   if [ -f "$LOCK" ]; then
     pid="$(tr -cd '0-9' <"$LOCK" 2>/dev/null | head -c 12)"
     if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
@@ -35,7 +35,7 @@ if [ $rc_lock -eq 0 ]; then
       echo "removed dead-pid lock (was pid=$pid)"
       cleaned=1
     elif [ -z "$pid" ]; then
-      # flock free 残留空文件
+      # flock is free; leftover empty file
       if python3 - "$LOCK" <<'PY' 2>/dev/null
 import fcntl,sys
 h=open(sys.argv[1],"a+")

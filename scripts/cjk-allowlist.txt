@@ -1,0 +1,9 @@
+# Paths that may contain CJK characters. One glob per line, relative to the repo root.
+# Matched with fnmatch against the full relative path (both * and ** work as *).
+#
+# User-facing Simplified Chinese mirrors. English files stay CJK-free.
+*.zh-CN.md
+**/*.zh-CN.md
+# Deliberate CJK test fixtures (parser, classifier, and annotation cases).
+bin/cortex-loop-tests/fixtures/**
+bin/cortex-loop-tests/fixtures/**/*

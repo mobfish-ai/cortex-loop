@@ -1,3 +1,5 @@
+English | [简体中文](README.zh-CN.md)
+
 # cortex-loop
 
 cortex-loop is the swarm-node heartbeat engine. It keeps a git ledger, a clock, and the lease / swarm / tick coordination that moves declared work forward when nobody is watching.
@@ -87,6 +89,7 @@ Provider API keys are read from the process environment or from a local OpenClaw
 
 ```sh
 bash scripts/public-hygiene.sh
+python3 scripts/cjk-source-gate.py
 bash bin/cortex-loop-tests/suite.sh
 ```
 
@@ -103,7 +106,7 @@ What runs here:
 
 `bash bin/cortex-loop-tests/harness-run-smoke.sh` exits 0 with a SKIP when `CORTEX_HARNESS_DIR` is absent or Node 24 is missing.
 
-GitHub Actions (`.github/workflows/test.yml`) runs the hygiene gate and the suite on push and pull request.
+GitHub Actions (`.github/workflows/test.yml`) runs the hygiene gate, the CJK source gate, and the suite on push and pull request. The CJK gate fails when ideographs or fullwidth punctuation appear outside `*.zh-CN.md` and `bin/cortex-loop-tests/fixtures/`.
 
 ### Skips — private companions are not in this slice
 

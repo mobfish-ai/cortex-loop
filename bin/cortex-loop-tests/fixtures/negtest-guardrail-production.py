@@ -90,7 +90,7 @@ with tempfile.TemporaryDirectory(prefix="cortex-guardrail-") as raw:
                  (state / "authorization-incidents.jsonl").read_text().splitlines() if line]
     assert len(auth_rows) == before_auth + 1
 
-    # Candidate builder 本身也是 bounds 判定点，不能只依赖后置 integrator。
+    # The candidate builder is itself a bounds decision point; do not rely only on the later integrator.
     saved_changed = loop._workspace_changed_paths
     saved_contract = loop.workspace_contract_paths
     loop._workspace_changed_paths = lambda _worktree: ["allowed/out.md", "outside/secret.txt"]
@@ -113,7 +113,7 @@ with tempfile.TemporaryDirectory(prefix="cortex-guardrail-") as raw:
     bounds = next(row for row in auth_rows if row["task_id"] == "T-BOUNDS")
     assert "outside/secret.txt" in bounds["evidence"]
 
-    # retry integration 必须与首轮 integration 共用授权事件 producer。
+    # A retry integration must share the authorization-event producer with the first integration.
     saved_latest = loop._load_latest_candidate
     saved_integrator = loop.run_workspace_integrator
     saved_append = loop.append_attempt_event
@@ -180,7 +180,7 @@ with tempfile.TemporaryDirectory(prefix="cortex-guardrail-") as raw:
     try:
         for _ in range(3):
             ok, used, why = loop.reserve_daily_advance("guard", 2, task_id="T4")
-            assert not ok and used == 2 and "上限" in why
+            assert not ok and used == 2 and "calendar-day cap" in why
     finally:
         loop.fetch_refs, loop.rev_ref, loop.read_ref = saved_fetch, saved_rev, saved_read
 
@@ -189,8 +189,8 @@ with tempfile.TemporaryDirectory(prefix="cortex-guardrail-") as raw:
     assert len([row for row in budget_rows if row["incident_type"] == "daily_cas_overage"]) == 1
     assert len([row for row in budget_rows if row["incident_type"] == "model_quota_breach"]) == 1
 
-    # 三类量具都必须 fail closed：坏 id/枚举/severity/timestamp/evidence
-    # 让 status=UNKNOWN，且 validate rc=1；逐字段破坏后恢复真实账本。
+    # All three meters must fail closed: a bad id/enum/severity/timestamp/evidence
+    # yields status=UNKNOWN and validate rc=1; break one field at a time, then restore the real ledger.
     destructive = {
         "cortex-authorization-incident.sh": (
             state / "authorization-incidents.jsonl",

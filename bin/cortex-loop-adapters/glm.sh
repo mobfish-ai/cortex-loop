@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 # cortex-loop:requires-env PATH
-# 说明：GLM(open.bigmodel.cn / 智谱) 是国内可直连服务商，脚本不主动设置/清空
-# HTTP_PROXY，继承调用环境原样传递。
+# Note: GLM (open.bigmodel.cn / Zhipu) is reachable directly. This script does not set or clear
+# HTTP_PROXY; it inherits the caller environment as-is.
 #
-# cortex-loop adapter: glm — 廉价执行通道次选（MiniMax 全部 key 失败后的降级目标）
-# 约定接口：$1=提示词文件  $2=结果文件
+# cortex-loop adapter: glm — second choice on the cheap path (fallback after every MiniMax key fails)
+# Contract: $1=prompt file  $2=result file
 #
-# 定位（同 minimax.sh，别当主力，也别当 judge）：
-#   glm-4-flash 干**有明确规格**的活 —— 结构化修复、按 fix-brief 改代码、拆任务、
-#   写文案。CLAUDE.md 铁律「脚本/cron/自动化 优先 GLM」原本把 GLM 排第一位，
-#   2026-07-30 operator 拍板改为 MiniMax 优先（账号更多、额度更充裕）、GLM 次选——
-#   本文件因此定位为**降级目标**，不是首选（首选见 minimax.sh，降级链见 cheap.sh）。
-#   ⛔ 绝不给它 judge（质量否决）：铁律「AI 只有否决权」，弱模型误否决成本高于漏放。
-#   ⛔ 也绝不给它写 status/done：完成判定永远只走机械门（cortex-loop try-complete）。
-#   与 claude.sh 的分工：需强推理/高 stakes 才上 Claude 订阅；本 adapter 默认走廉价通道。
+# Role (same as minimax.sh: not the primary worker, and not the judge):
+#   glm-4-flash does **well-specified** work -- structured fixes, edits that follow a fix-brief, task splits,
+#   and copy. CLAUDE.md used to rank GLM first under "scripts/cron/automation prefer GLM".
+#   On 2026-07-30 the operator put MiniMax first (more accounts, more quota) and GLM second --
+#   so this file is the **fallback**, not the first choice (first choice is minimax.sh; the chain is cheap.sh).
+#   NEVER give it judge (quality veto): the rule is "AI has only a veto"; a weak false veto costs more than a miss.
+#   NEVER let it write status/done: completion always goes through the mechanical gate (cortex-loop try-complete).
+#   Split with claude.sh: Claude subscription only for hard reasoning / high stakes; this adapter stays on the cheap path.
 #
-# 多 key 配置：读 models.providers.zhipu.apiKey + .apiKeys[]（数组，新约定，
-#   operator 目前只配了 1 个 GLM key，暂不需要；结构预留以防未来多账号）
-#   外加 env GLM_API_KEYS（逗号分隔，临时补位用）。
+# Multi-key config: read models.providers.zhipu.apiKey + .apiKeys[] (array, new convention;
+#   the operator currently has 1 GLM key, so this is unused for now; the shape is reserved for more accounts)
+#   plus env GLM_API_KEYS (comma-separated, temporary fill-in).
 set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
@@ -40,7 +40,7 @@ TIMEOUT="${CORTEX_GLM_TIMEOUT:-120}"
 
 ORDERED="$(oc_ordered_keys "zhipu" "GLM_API_KEYS" "$STATE_FILE" "$COOLDOWN")"
 if [[ -z "$ORDERED" ]]; then
-    echo "[adapter] 无可用 GLM key（openclaw.json 未配置 models.providers.zhipu.apiKey）" > "$RESULT"
+    echo "[adapter] no usable GLM key (openclaw.json has no models.providers.zhipu.apiKey)" > "$RESULT"
     exit 89
 fi
 TOTAL="$(printf '%s\n' "$ORDERED" | grep -c .)"
@@ -67,7 +67,7 @@ if [[ $success -eq 1 ]]; then
 fi
 
 {
-    echo "[adapter] glm 全部 ${attempts} 个 key 失败：${summary}"
+    echo "[adapter] glm all ${attempts} keys failed: ${summary}"
     echo "[adapter] executor=glm model=$MODEL rc=97"
 } > "$RESULT"
 exit 97

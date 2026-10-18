@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""E14 — TASKS 行缺 failure_modes（负空间）→ 合同 gate 必须 FAIL。
+"""E14 -- a TASKS row missing failure_modes (negative space) -> the contract gate must FAIL.
 
-正负夹逼是 loop_tasks 合同的核心：只写「怎样算成」不写「怎样算作弊」= 半合同，
-执行者可以拿一份空泛文档骗过完成门。gate 拦不住半合同，机械门就成了摆设。
+Positive and negative bounds are the core of the loop_tasks contract: writing only "what counts as done"
+and not "what counts as cheating" is a half contract. An executor can then wave an empty document past
+the completion gate. If the gate cannot stop a half contract, the mechanical gate is decoration.
 
-隔离：把真账本**复制**进临时 CORTEX_ROOT 再改坏，真 TASKS.md 一个字节都不动。
+Isolation: copy the real ledger into a temporary CORTEX_ROOT and break the copy. The real TASKS.md is not written.
 """
 
 import os
@@ -36,11 +37,11 @@ try:
     os.makedirs(os.path.dirname(target))
     shutil.copy2(REAL_TASKS, target)
 
-    # ① 原样复制 → gate 必须 PASS（先证明夹具本身是好的，否则下面的红没有意义）
+    # (1) an unmodified copy must PASS (prove the fixture itself is good, or the later red is meaningless)
     code, out = run_gate(sandbox)
-    check("未改动的副本 gate PASS", code == 0 and '"status": "PASS"' in out, out.strip()[-300:])
+    check("unmodified copy gate PASS", code == 0 and '"status": "PASS"' in out, out.strip()[-300:])
 
-    # ② 把某一行的 failure_modes 挖空 → 必须 FAIL
+    # (2) blank one row's failure_modes -> must FAIL
     with open(target, encoding="utf-8") as fh:
         lines = fh.read().split("\n")
     hit = None
@@ -58,16 +59,16 @@ try:
             lines[idx] = "| " + " | ".join(cells) + " |"
             hit = idx
             break
-    check("找到并改坏一条任务的 failure_modes", hit is not None)
+    check("found a task row and broke its failure_modes", hit is not None)
     with open(target, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))
 
     code, out = run_gate(sandbox)
-    check("缺 failure_modes → gate 退出码非 0", code != 0, "退出码 %d" % code)
-    check("gate 点名半合同", "failure_modes empty (half contract)" in out, out.strip()[-300:])
-    check("gate 判定 FAIL", '"status": "FAIL"' in out, out.strip()[-300:])
+    check("missing failure_modes -> gate exit code is non-zero", code != 0, "exit code %d" % code)
+    check("gate names the half contract", "failure_modes empty (half contract)" in out, out.strip()[-300:])
+    check("gate verdict FAIL", '"status": "FAIL"' in out, out.strip()[-300:])
 
-    # ③ 顺带验负空间的孪生条款：done 无 evidence = 假完成
+    # (3) also check the twin negative-space clause: done with no evidence is a fake completion
     with open(target, encoding="utf-8") as fh:
         text = fh.read()
     lines = text.split("\n")
@@ -80,22 +81,22 @@ try:
         if not line.strip().startswith("|") or len(cells) != len(header):
             continue
         if idx == hit:
-            cells[failure_idx] = "凑合的负空间"
+            cells[failure_idx] = "minimal negative space"
             lines[idx] = "| " + " | ".join(cells) + " |"
             repaired_half_contract = True
         elif not blanked_done and cells[status_idx] == "done":
             cells[evidence_idx] = ""
             lines[idx] = "| " + " | ".join(cells) + " |"
             blanked_done = True
-    check("半合同已修复且找到 done 行挖空 evidence",
+    check("half contract repaired and a done row had evidence blanked",
           repaired_half_contract and blanked_done)
     with open(target, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))
     code, out = run_gate(sandbox)
-    check("done 无 evidence → gate FAIL", code != 0 and "done without evidence" in out,
+    check("done with no evidence -> gate FAIL", code != 0 and "done without evidence" in out,
           out.strip()[-300:])
 finally:
     shutil.rmtree(sandbox, ignore_errors=True)
-    print("    清理：临时 CORTEX_ROOT 已删；真账本未被打开写入")
+    print("    cleanup: temporary CORTEX_ROOT removed; the real ledger was not opened for write")
 
 finish()

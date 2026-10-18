@@ -1,66 +1,68 @@
-# 四稀缺 · 对齐版（CHARTER 三稀缺 + 于猛线认证/验证稀缺研究融合）
+English | [简体中文](four-scarcities-aligned.zh-CN.md)
 
-> 建立日期：2026-10-15
-> 源头：CHARTER v1.5 三稀缺（locked）+ ins-20260820（认证稀缺）+ ins-20260821（自验证≠独立 Guardian）+ 于猛线验证值钱调研（verification-and-insurance-2026-10-08）+ RSI quarantine 考卷设计实践
-> 地位：**cortex-loop 四平面之②世界状态的稀缺性模型**——RSI 闭环的心跳择机信号、商业化选块判据、cortex-harness 方向引导均以此为对齐基准
-> 修订纪律：本文件是纯增量补充（CHARTER 前三稀缺不删不改）；第四维已于 2026-10-15 经 [[business/governance/AAR/2026-10-15-014-intent-continuous-mode-and-fourth-scarcity|AAR-2026-10-15-014]] 正式采纳——operator 拍板「A、B 都可以，同批一起，一推到底」，CHARTER 已升 v1.6（§0 四稀缺条款落定），本文件由「对齐版草案」转为「正式对齐版」，与 CHARTER v1.6 同源同效。
+# Four scarcities, aligned (CHARTER's three scarcities fused with the certification and verification-scarcity research)
 
-## 三稀缺 + 第四稀缺
+> Established: 2026-10-15
+> Sources: CHARTER v1.5 three scarcities (locked) + ins-20260820 (certification scarcity) + ins-20260821 (self-verification is not an independent Guardian) + the verification-is-valuable study (verification-and-insurance-2026-10-08) + RSI quarantine exam design practice
+> Standing: **the scarcity model of cortex-loop plane 2, world state** — the alignment baseline for the RSI loop's heartbeat timing signal, the commercialization block-selection criterion, and cortex-harness direction
+> Revision discipline: this file is a pure additive supplement (CHARTER's first three scarcities are not deleted and not rewritten). The fourth dimension was formally adopted on 2026-10-15 by [[business/governance/AAR/2026-10-15-014-intent-continuous-mode-and-fourth-scarcity|AAR-2026-10-15-014]] — the operator decided "A and B are both fine; ship them in the same batch and push them through". CHARTER has risen to v1.6 (the §0 four-scarcity clause is settled). This file moved from "aligned draft" to "formal aligned edition", same source and same effect as CHARTER v1.6.
 
-| # | 稀缺 | 来源 | 一句话 | Cortex 解法 |
+## Three scarcities + the fourth scarcity
+
+| # | Scarcity | Source | One sentence | Cortex answer |
 |---|------|------|--------|------------|
-| 1 | 执行连续性 | CHARTER v1.5 | 身份/意图/Topic/证据不依附某个模型或窗口 | Topic 席 + 件套 + 跨 runtime 绑定 |
-| 2 | 用户注意力 | CHARTER v1.5 | Agent 自己续跑/自愈/验证；人只管方向、价值、扩权、不可逆 | 心跳 + INTENT + 择机信号 |
-| 3 | 可信交付 | CHARTER v1.5 | 有界证据 + 独立验证 + 本地采信，非中央盖章 | Receipt + Attestation + 独立验证链 |
-| **4** | **认证稀缺（certification scarcity）** | ins-20260820 + 于猛线 | **生成已过剩，认证才稀缺**——没经过独立盖章的漂亮产出，和垃圾同一档 | **RSI quarantine 考卷 + 独立 Guardian + 规格库 + 失败/赔付数据 + 监管/保险流程对接** |
+| 1 | Execution continuity | CHARTER v1.5 | identity / intent / Topic / evidence do not depend on a particular model or window | Topic seat + kit + cross-runtime binding |
+| 2 | User attention | CHARTER v1.5 | the Agent resumes, self-heals, and verifies on its own; the person handles only direction, value, expansion of authority, and the irreversible | heartbeat + INTENT + timing signal |
+| 3 | Trusted delivery | CHARTER v1.5 | bounded evidence + independent verification + local acceptance, not a central seal | Receipt + Attestation + independent verification chain |
+| **4** | **Certification scarcity** | ins-20260820 + the verification-value research line | **generation is already in surplus; certification is what is scarce** — pretty output with no independent seal sits in the same bin as garbage | **RSI quarantine exam + independent Guardian + a spec library + failure and payout data + a join to regulatory and insurance process** |
 
-## 第四稀缺的三层论证
+## Three layers of argument for the fourth scarcity
 
-### 学术层（ins-20260820 数学形式化验证）
-数学用 Lean 逐行查——证明已过剩，盖章才稀缺。人从找答案改去造盖章系统。
-→ Cortex 同构：模型发现可以外包，**认证不能外包给作者自己**。
+### Academic layer (ins-20260820, mathematical formal verification)
+Mathematics checks Lean line by line — proofs are already in surplus; the seal is what is scarce. People move from finding answers to building seal systems.
+→ The Cortex isomorphism: model discovery can be outsourced. **Certification cannot be outsourced to the author.**
 
-### 技术层（ins-20260821 自验证 ≠ 独立 Guardian）
-Best-of-N + 细粒度自验证可以抬便宜模型的 Pass@1，但**自验证过门 ≠ Guardian 过门**。
-→ RSI 闭环的实现：proposer 不能碰 quarantine 半区（**机制化**这个区分）。
+### Technical layer (ins-20260821, self-verification is not an independent Guardian)
+Best-of-N plus fine-grained self-verification can raise a cheap model's Pass@1, but **passing self-verification is not passing the Guardian**.
+→ How the RSI loop implements it: the proposer cannot touch the quarantine half (this distinction is **mechanized**).
 
-### 商业层（于猛线验证+保险调研）
-验证值钱要三个条件同时成立：**规格写得清 + 错了很贵 + 有人必须签字**。护城河不在验证器本身（Lean/SMT 都开源），而在四样东西：**规格库、独立性、失败和赔付数据、被写进监管或保险流程**。
-→ Cortex 的定位：规格库=考卷+合同；独立性=quarantine 隔离+分权限判分器；失败/赔付数据=ERRORS 台账+ledger；监管/保险=待建。
+### Commercial layer (verification plus insurance study)
+Verification is valuable only when three conditions hold at once: **the spec is written clearly + being wrong is expensive + someone must sign**. The moat is not the verifier itself (Lean and SMT are both open source). It is four things: **a spec library, independence, failure and payout data, and being written into a regulatory or insurance process**.
+→ Where Cortex sits: spec library = exam + contract; independence = quarantine isolation + a permission-split scorer; failure and payout data = the ERRORS ledger + ledger; regulatory / insurance = not built yet.
 
-## 商业含义（哪三个条件同时成立才值钱）
+## Commercial meaning (valuable only when all three conditions hold)
 
-| 条件 | 命中场景 | 不命中场景 |
+| Condition | Hits | Misses |
 |---|---|---|
-| 规格清 | 合约规则/权限策略/关键代码/数学 | 「帮我看看这个好不好」|
-| 错了贵 | 资金/合规/安全/发到客户的邮件 | 内部测试/草稿/浏览 |
-| 有人签字 | 监管要求/合同承诺/品牌声誉 | 个人笔记/内部 draft |
+| Spec is clear | contract rules / permission policy / critical code / mathematics | "take a look and tell me if this is good" |
+| Being wrong is expensive | money / compliance / safety / mail sent to a customer | internal test / draft / browsing |
+| Someone signs | a regulatory requirement / a contractual commitment / brand reputation | a personal note / an internal draft |
 
-TikTok 多区域出口网关命中三条 ✓（资金合规/品牌声誉/运营发布）
-SCM 盘点命中规格清+错了贵 ✓（库存决策影响现金流）
-日常内部浏览三条都不命中 → 不需要付费认证，dc 档够用
+The TikTok multi-region egress gateway hits all three (money compliance / brand reputation / operational release).
+An SCM inventory count hits a clear spec plus being wrong is expensive (inventory decisions move cash).
+Ordinary internal browsing hits none of the three → it does not need paid certification; the dc tier is enough.
 
-## RSI 闭环的对接点
+## Where it joins the RSI loop
 
-四稀缺模型直接影响 RSI 六步闭环的设计决策：
+The four-scarcity model directly constrains design decisions in the RSI six-step loop:
 
-| RSI 步骤 | 四稀缺约束 |
+| RSI step | Four-scarcity constraint |
 |---|---|
-| What（改进对象） | 优先选「命中四稀缺的资产」——认证稀缺的资产（如 TikTok 出口网关）比纯内部工具杠杆大 |
-| Generate | proposer 只从 ERRORS 抽补丁 = 认证稀缺要求「修法必须经过独立验证」 |
-| Evaluate | quarantine 考卷 = 第四稀缺的机制化（认证不能外包给作者自己） |
-| Select | champion-lock 4 维门 = 独立 Guardian 的实现（不是 proposer 自评） |
-| 商业化选块 | 四稀缺命中的块优先冲 B 门（验证服务 > 泛浏览工具） |
+| What (the thing to improve) | prefer "an asset that hits the four scarcities" — an asset scarce in certification (such as the TikTok egress gateway) has more leverage than a purely internal tool |
+| Generate | the proposer draws patches only from ERRORS = certification scarcity requires "the fix must pass independent verification" |
+| Evaluate | the quarantine exam = the fourth scarcity mechanized (certification cannot be outsourced to the author) |
+| Select | the champion-lock 4-dimension gate = an independent Guardian (not the proposer scoring itself) |
+| Commercialization block selection | a block that hits the four scarcities is pushed at the B gate first (a verification service over a general browsing tool) |
 
-## 于猛线调研的完整发现（11 机会排序）
+## Full findings of the verification-value study (11 opportunities, ranked)
 
-前三名：
-1. **独立验证**（规格清+错了贵+有人签字 → 值钱）
-2. **AI 保险**（验证服务比保费池更早更大；保险按网络险量级估到 2035）
-3. **电力散热**（可投）
+Top three:
+1. **Independent verification** (clear spec + being wrong is expensive + someone signs → valuable)
+2. **AI insurance** (the verification service is earlier and larger than the premium pool; insurance, sized like cyber insurance, is estimated out to 2035)
+3. **Power and cooling** (investable)
 
-详见 [[reports/2026-10-09/cortex-harness/ai-opportunities-valuation-2026-10-09]]。
+Detail: [[reports/2026-10-09/cortex-harness/ai-opportunities-valuation-2026-10-09]].
 
 ---
 
-*维护者：cortex-harness 席 · 本文件是纯增量补充，CHARTER 前三稀缺不删不改。第四维已于 2026-10-15 经 AAR-2026-10-15-014 正式采纳（CHARTER v1.6），本文件为正式对齐版。*
+*Maintainer: the cortex-harness seat. This file is a pure additive supplement. CHARTER's first three scarcities are not deleted and not rewritten. The fourth dimension was formally adopted on 2026-10-15 by AAR-2026-10-15-014 (CHARTER v1.6). This file is the formal aligned edition.*

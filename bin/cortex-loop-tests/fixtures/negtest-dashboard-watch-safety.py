@@ -16,8 +16,8 @@ import time
 ROOT = Path(__file__).resolve().parents[3]
 DASH = ROOT / "bin" / "cortex-dashboard.sh"
 source = DASH.read_text(encoding="utf-8")
-watch = source.split("# ═══ --watch：安全的单前台刷新", 1)[1].split(
-    "# ── 采集（全部真探）", 1
+watch = source.split("# === --watch: safe single foreground refresh", 1)[1].split(
+    "# -- collect (all live probes)", 1
 )[0]
 
 for forbidden in ("pkill ", "pkill\t", "COLLECTOR", "kill -0", ") &"):
@@ -28,9 +28,9 @@ for required in ("\\033[?1049h", "\\033[?1049l", "\\033[?25l", "\\033[?25h"):
     if required not in source:
         raise AssertionError(f"watch screen lifecycle missing: {required}")
 
-if '· 跑%s · 待%s · 结%s · 败%s · 下次%2ss · Ctrl-C' not in watch:
+if ' - run%s - wait%s - done%s - fail%s - next%2ss - Ctrl-C' not in watch:
     raise AssertionError("watch pulse regressed from the bounded focus summary")
-if '"${_watch_tasks:-任务读取中}"' in watch:
+if '"${_watch_tasks:-reading tasks}"' in watch:
     raise AssertionError("watch pulse repeats the full task summary and can wrap narrow terminals")
 if "sed -n '1p' \"$SNAP_TXT\"" not in watch:
     raise AssertionError("watch pulse no longer reads heartbeat from compact snapshot header")
@@ -56,7 +56,7 @@ with tempfile.TemporaryDirectory(prefix="cortex-dashboard-watch-") as tmp:
     output, _ = proc.communicate(timeout=15)
     if proc.returncode != 130:
         raise AssertionError(f"SIGINT exit={proc.returncode}; output={output[-500:]}")
-    if "没有后台采集进程需要追杀" not in output:
+    if "no background collector to stop" not in output:
         raise AssertionError("watch did not report safe foreground-only shutdown")
     if "\x1b" in output:
         raise AssertionError("non-TTY watch emitted terminal control sequences")
@@ -167,10 +167,10 @@ with tempfile.TemporaryDirectory(prefix="cortex-dashboard-watch-compact-") as tm
     lines = compact.splitlines()
     if len(lines) > 34:
         raise AssertionError(f"watch compact view exceeds one-screen budget: {len(lines)} lines")
-    for heading in ("━━ 当前任务", "━━ 执行与交付", "━━ 节点分数", "━━ 机制红榜", "━━ 质量"):
+    for heading in ("━━ current tasks", "━━ execution and delivery", "━━ node scores", "━━ mechanism board", "━━ quality"):
         if heading not in compact:
             raise AssertionError(f"watch compact view missing focus block: {heading}")
-    for verbose in ("✓ 最近完成", "开发工作区  登记"):
+    for verbose in ("✓ recently completed", "dev workspaces  registered"):
         if verbose in compact:
             raise AssertionError(f"watch compact view regressed verbose block: {verbose}")
 

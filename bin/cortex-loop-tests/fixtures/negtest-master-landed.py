@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""完成语义负测：candidate 可见不等于 canonical master 已落地。"""
+"""Negative test of completion semantics: a visible candidate is not canonical master landed."""
 import argparse
 import importlib.machinery
 import importlib.util
@@ -80,7 +80,7 @@ with tempfile.TemporaryDirectory(prefix="cortex-master-landed-") as tmp:
         args = argparse.Namespace(line="landing", task="T1", judge=False)
 
         visible, _ = loop.commit_origin_reachable(candidate_oid)
-        assert visible, "fixture 无效：candidate 应已在 origin/candidate 可达"
+        assert visible, "fixture invalid: candidate should already be reachable on origin/candidate"
         assert loop.cmd_try_complete(args) == 0
         assert loop._task_or_error("landing", "T1")["status"] == "settling"
         pending = loop.cmd_try_complete.last_failure
@@ -89,7 +89,7 @@ with tempfile.TemporaryDirectory(prefix="cortex-master-landed-") as tmp:
         assert pending["candidate_oid"] == candidate_oid, pending
         assert pending["landed_oid"] == master_before, pending
 
-        # 同一 candidate 真正进入 canonical master 后，完成门才允许 done。
+        # The completion gate allows done only after that same candidate is actually on canonical master.
         git(repo, "push", "origin", "candidate:master")
         git(repo, "fetch", "origin", "+refs/heads/master:refs/remotes/origin/master")
         assert loop.cmd_try_complete(args) == 0
@@ -127,7 +127,7 @@ with tempfile.TemporaryDirectory(prefix="cortex-master-landed-") as tmp:
         else:
             os.environ["CORTEX_CANONICAL_REF"] = saved["canonical_ref"]
 
-# 无 origin 的老式本地 fixture 只能显式 opt-in；同一仓库未开开关必须 fail closed。
+# An old local fixture with no origin can only opt in explicitly; the same repo with the switch off must fail closed.
 with tempfile.TemporaryDirectory(prefix="cortex-no-origin-") as tmp:
     repo = Path(tmp)
     subprocess.run(["git", "init", str(repo)], check=True,

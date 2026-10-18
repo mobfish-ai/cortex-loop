@@ -1,28 +1,28 @@
 #!/usr/bin/env python3
-"""cortex-loop 期待清单读取器 —— 让 dashboard / CI 能机读 EXPECTATIONS.md。
+"""cortex-loop expectations reader -- so dashboard / CI can machine-read EXPECTATIONS.md.
 
-设计约束（三条，缺一即退化）：
-  1. 三态不坍缩（DIMENSIONAL）：met / gap / unknown 三态并列，
-     unknown 绝不倒向 met（fail-open）也不倒向 gap（过度保守）。
-  2. 携带错题（ATOMIZE）：解析不到表格 → 退出码 2 + 说明，不静默返回空清单。
-     「读不到文件」和「文件里没有 gap」是两件完全不同的事。
-  3. 人机同读一份真相（GLASSBOX）：唯一数据源是 EXPECTATIONS.md 本身，
-     不维护第二份 JSON —— 两套必然分叉。
+Design constraints (three; drop one and it degrades):
+  1. Three states do not collapse (DIMENSIONAL): met / gap / unknown stay side by side.
+     unknown never falls over to met (fail-open) or to gap (too conservative).
+  2. Carry the error (ATOMIZE): if the table cannot be parsed, exit code 2 plus an explanation; do not silently return an empty list.
+     "cannot read the file" and "the file has no gap" are two different facts.
+  3. Humans and machines read one source of truth (GLASSBOX): the only data source is EXPECTATIONS.md itself.
+     Do not keep a second JSON -- two copies will diverge.
 
-IMM-T67 修补：
-  - 表格感知的列切分（管道符在 backtick 内不计为分隔符），避免 EX19
-    `grep -qE '预算编排|usage API|窗口计时'` 内的 `|` 把 short_test 截断。
-  - 校验 short_test 命令可执行性（语法检查 + 反模式拦截）；不合法命令
-    强制 ineligible，不让带毒命令混进 promote 流水线。
-  - EX19 状态由 `bin/cortex-budget-incident.sh status` 推导，不靠 markdown
-    表格单元里的手写字面（消除「复制第二份预算真相」failure_mode）。
+IMM-T67 fixes:
+  - Table-aware column splits (a pipe inside backticks is not a separator), so EX19
+    `grep -qE 'budget orchestration|usage API|window timing'` does not truncate short_test on its `|`.
+  - Check that the short_test command can run (syntax check + anti-pattern block); an illegal command
+    is forced ineligible, so a poisoned command cannot enter the promote pipeline.
+  - EX19 state is derived from `bin/cortex-budget-incident.sh status`, not from a handwritten literal
+    in a markdown cell (removes the "copy a second budget truth" failure_mode).
 
-用法：
-  python3 bin/cortex-loop-expectations.py            # 人读摘要
-  python3 bin/cortex-loop-expectations.py --json     # 机读（dashboard / CI）
-  python3 bin/cortex-loop-expectations.py --id EX01  # 单条
+Usage:
+  python3 bin/cortex-loop-expectations.py            # human-readable summary
+  python3 bin/cortex-loop-expectations.py --json     # machine-readable (dashboard / CI)
+  python3 bin/cortex-loop-expectations.py --id EX01  # one item
 
-退出码：0=全部 met · 1=有 gap · 2=有 unknown 或解析失败（判不出来 ≠ 通过）
+Exit code: 0=all met | 1=has gap | 2=has unknown or parse failure (cannot tell is not a pass)
 """
 import argparse
 import json
@@ -39,16 +39,16 @@ STATES = ("met", "gap", "unknown")
 ROW_RE = re.compile(r"^\|\s*(EX\d+)\s*\|(.+)$")
 SECTION_RE = re.compile(r"^##\s+([A-D])\s*·\s*(.+?)\s*$")
 
-# ── IMM-T67: 表格列边界感知 ──────────────────────────────────────────────
-# 找到 markdown 表格中真正作为列分隔的 `|` 位置 —— 跳过 backtick 包裹的代码段
-# 与 `&` 链接目标里的 `|`。这样 EX19 的 `grep -qE '预算编排|usage API|窗口计时'`
-# 里的内部管道符不会把 short_test 截断。
+# ── IMM-T67: table column-boundary awareness ─────────────────────────────
+# Find `|` positions that really separate markdown columns -- skip pipes inside backtick spans
+# and inside wiki-link targets. EX19's `grep -qE 'budget orchestration|usage API|window timing'`
+# then keeps its inner pipes, so short_test is not truncated.
 _BACKTICK_RE = re.compile(r"`([^`]*)`")
 _HREF_PIPE_RE = re.compile(r"\[\[([^\]|]+)\|([^\]]+)\]\]")
 
 
 def strip_md(cell: str) -> str:
-    """去掉 markdown 强调/链接壳，保留可读文本。"""
+    """Strip markdown emphasis/link wrappers and keep the readable text."""
     cell = _HREF_PIPE_RE.sub(r"\2", cell)
     cell = re.sub(r"\[\[([^\]]+)\]\]", r"\1", cell)
     cell = cell.replace("**", "").replace("`", "")
@@ -56,17 +56,17 @@ def strip_md(cell: str) -> str:
 
 
 def _mask_inner_pipes(line: str) -> str:
-    """把 backtick 代码段里的 `|` 替换成 \\x00，避免被当作列分隔符。"""
+    """Replace `|` inside backtick spans with \\x00 so they are not treated as column separators."""
     def _sub(m: re.Match) -> str:
         return "`" + m.group(1).replace("|", "\x00") + "`"
     return _BACKTICK_RE.sub(_sub, line)
 
 
 def column_count(line: str) -> int:
-    """数出 markdown 行里真正作为列分隔的 `|` 个数（跳过 backtick / wiki alias）。
+    """Count `|` that really separate columns (skip backtick spans / wiki aliases).
 
-    用「在不在 backtick / wiki 里」的状态机走字符，比「按 header 位置切」更鲁棒：
-    header 列宽与 data 列宽不同，位置根本不能复用。
+    Walk characters with an "inside backtick / wiki" state machine. That is more robust than slicing by header position:
+    header column widths and data column widths differ, so positions cannot be reused.
     """
     n = len(line)
     count = 0
@@ -87,7 +87,7 @@ def column_count(line: str) -> int:
             i += 2
             continue
         if wiki and ch == "|" and i + 1 < n and line[i + 1] != "]":
-            # wiki alias 的 | 跳过去
+            # skip the | inside a wiki alias
             i += 1
             continue
         if wiki and ch == "]" and i + 1 < n and line[i + 1] == "]":
@@ -103,9 +103,9 @@ def column_count(line: str) -> int:
 
 
 def smart_split_row(line: str) -> list:
-    """按 markdown 表格列切分行 —— 跳过 backtick 与 wiki alias 内的 `|`。
+    """Split a markdown table row into columns -- skip `|` inside backticks and wiki aliases.
 
-    返回 cell 列表（含首尾装饰空 cell）；长度等于 column_count(line)。
+    Returns the cell list (including the decorative empty cells at both ends); length equals column_count(line).
     """
     cells = []
     cur = []
@@ -151,22 +151,22 @@ def smart_split_row(line: str) -> list:
     return cells
 
 
-# ── IMM-T67: short_test 命令校验 ─────────────────────────────────────────
+# ── IMM-T67: short_test command check ────────────────────────────────────
 def validate_short_test(st: str) -> tuple:
-    """返回 (ok, reason)。不合法命令 → ineligible。
+    """Return (ok, reason). An illegal command becomes ineligible.
 
-    规则：
-      1. 不可为空、不可只含 shell 元字符、不可含裸换行（截断信号）。
-      2. 调用 `bash -n -c <cmd>` 做语法检查；非 0 退出 = 语法坏。
-      3. 拒收带 `|| true` / `; exit 0` 的假绿前缀。
-      4. 拒收纯注释 / echo ok 这种「什么也不测」的命令。
+    Rules:
+      1. Must not be empty, must not be only shell metacharacters, must not contain a bare newline (truncation signal).
+      2. Run `bash -n -c <cmd>` as a syntax check; non-zero exit = broken syntax.
+      3. Reject fake-green prefixes such as `|| true` / `; exit 0`.
+      4. Reject a comment-only / echo-ok command that tests nothing.
     """
     if not st:
         return False, "empty"
     if "\n" in st and not st.rstrip().endswith(("fi", "esac", "done", "}", ")", "\"")):
-        # 多行但最后一行未正常收尾 —— 截断信号
+        # multiline, but the last line is not closed -- truncation signal
         return False, "truncated-multiline"
-    # 反作弊：明确禁掉的假绿前缀
+    # anti-cheat: fake-green prefixes that are explicitly banned
     banned_prefixes = (
         "true && ", "true||", ": &&", "exit 0",
         "|| true", "; true", "&& true",
@@ -174,14 +174,14 @@ def validate_short_test(st: str) -> tuple:
     for bp in banned_prefixes:
         if bp in st:
             return False, f"fake-green-prefix:{bp.strip()}"
-    # 必须含至少一个真实命令字符（字母 / 数字 / 点 / 斜杠）
+    # must contain at least one real command character (letter / digit / dot / slash)
     if not re.search(r"[A-Za-z0-9./]", st):
         return False, "no-command-chars"
-    # 纯注释（去掉 # 与空格后为空）= 什么也不测，应拒收
+    # comment only (empty after removing # and spaces) = tests nothing; reject
     body = re.sub(r"#.*", "", st).strip()
     if not body:
         return False, "comment-only-noop"
-    # 语法检查：调用 bash -n
+    # syntax check: call bash -n
     bash = shutil.which("bash")
     if bash:
         try:
@@ -196,14 +196,14 @@ def validate_short_test(st: str) -> tuple:
     return True, "ok"
 
 
-# ── IMM-T67: EX19 状态由 budget-incident 推导 ────────────────────────────
+# ── IMM-T67: EX19 state is derived from budget-incident ──────────────────
 def resolve_ex19_state() -> tuple:
-    """EX19 state 推导：(state, source_state, observed_events)。
+    """Derive EX19 state: (state, source_state, observed_events).
 
-    规则：
-      source UNKNOWN  → state=unknown   （orchestration 尚未落证据）
-      source OK       → state=met       （orchestration 存在且零事件）
-      source BREACH   → state=gap       （orchestration 真实记录到事件）
+    Rules:
+      source UNKNOWN  → state=unknown   (orchestration has not recorded evidence yet)
+      source OK       → state=met       (orchestration exists and has zero events)
+      source BREACH   → state=gap       (orchestration recorded a real event)
     """
     script = ROOT / "bin" / "cortex-budget-incident.sh"
     if not script.exists():
@@ -231,17 +231,17 @@ def resolve_ex19_state() -> tuple:
 
 
 def detect_state(cells) -> str:
-    """状态必须来自**独立的状态格**（整格等于 met/gap/unknown 之一）。
+    """State must come from a **standalone state cell** (the whole cell equals met, gap, or unknown).
 
-    刻意不做全行子串搜索 —— 正文里出现「CHARTER-SWARM §Unknown」这种引用
-    会把一条 gap 误判成 unknown（实测 EX19 踩过）。
-    找不到独立状态格 → unknown，绝不默认 met（fail-closed）。
+    Do not search the whole row for a substring -- a citation such as "CHARTER-SWARM §Unknown" in the prose
+    would misread a gap as unknown (EX19 hit this in practice).
+    If no standalone state cell is found, return unknown. Never default to met (fail-closed).
     """
     for cell in cells:
         # State cells are human-facing Markdown and often use **met** emphasis.
         # Detection must normalize presentation without weakening the exact-cell
         # rule; otherwise a visually valid row silently collapses to unknown.
-        token = strip_md(cell).lower().rstrip("。.")
+        token = strip_md(cell).lower().rstrip("\u3002.")
         if token in STATES:
             return token
     return "unknown"
@@ -249,7 +249,7 @@ def detect_state(cells) -> str:
 
 def parse(path: Path):
     if not path.exists():
-        return None, f"EXPECTATIONS.md 不存在：{path}"
+        return None, f"EXPECTATIONS.md does not exist: {path}"
     section = ""
     headers = []
     header_cols = 0
@@ -270,14 +270,14 @@ def parse(path: Path):
         if not m:
             continue
         if not headers:
-            # 没见到 header 就来数据行 —— 防御
+            # data row before any header -- defensive
             continue
         row_cells = smart_split_row(raw_line)
-        # 数据行的真实列数可能因 cell 内含 `|` 而多于 header 列数，
-        # 那正是 IMM-T67 想暴露的「截断」信号 —— 标记 ineligible。
+        # A data row can have more real columns than the header when a cell contains `|`.
+        # That is the truncation signal IMM-T67 wants to expose -- mark ineligible.
         row_real_cols = column_count(raw_line)
         truncated = row_real_cols > header_cols
-        # 但我们还是按 header 列宽来切，取前 header_cols 个 cell
+        # Still slice to the header width and keep the first header_cols cells
         cells = row_cells[:header_cols] if len(row_cells) >= header_cols else row_cells
         # Older expectation rows legitimately omit the trailing owner/short_test
         # columns. Preserve the known fact and pad the absent automation contract;
@@ -292,7 +292,7 @@ def parse(path: Path):
         short_test = None if short_test in (None, "", "-") else short_test
 
         ex_id = m.group(1)
-        # IMM-T67: EX19 状态由 budget-incident 推导
+        # IMM-T67: EX19 state is derived from budget-incident
         if ex_id == "EX19":
             derived, src_state, observed = resolve_ex19_state()
             state = derived
@@ -307,12 +307,12 @@ def parse(path: Path):
             state = detect_state(cells)
             ex19_sync = None
 
-        # IMM-T67: 校验 short_test —— 不合法 → ineligible
+        # IMM-T67: validate short_test -- illegal becomes ineligible
         if short_test:
             v_ok, v_reason = validate_short_test(short_test)
         else:
             v_ok, v_reason = False, "empty"
-        # IMM-T67: 截断（cell 内 pipe 让真实列数 > header 列数）也算不合法
+        # IMM-T67: truncation (a pipe inside a cell makes real columns > header columns) is also illegal
         if truncated and short_test:
             v_ok, v_reason = False, "truncated-cell-pipe-leak"
         eligible = (state != "met") and bool(owner and short_test and v_ok)
@@ -334,14 +334,14 @@ def parse(path: Path):
             item["ex19_sync"] = ex19_sync
         items.append(item)
     if not items:
-        return None, "解析到 0 条期待 —— 表格格式可能已变，这是故障不是「没有欠账」"
+        return None, "parsed 0 expectations -- the table format may have changed; this is a fault, not 'nothing owed'"
     return items, None
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="读 cortex-loop EXPECTATIONS.md（三态）")
-    ap.add_argument("--json", action="store_true", help="机读输出")
-    ap.add_argument("--id", help="只看某一条，如 EX01")
+    ap = argparse.ArgumentParser(description="Read cortex-loop EXPECTATIONS.md (three states)")
+    ap.add_argument("--json", action="store_true", help="machine-readable output")
+    ap.add_argument("--id", help="show one item, e.g. EX01")
     args = ap.parse_args()
 
     items, err = parse(DOC)
@@ -356,7 +356,7 @@ def main() -> int:
     if args.id:
         items = [i for i in items if i["id"] == args.id.upper()]
         if not items:
-            msg = f"没有这一条：{args.id}"
+            msg = f"no such item: {args.id}"
             print(json.dumps({"ok": False, "error": msg, "state": "unknown"},
                              ensure_ascii=False) if args.json else f"⚠️  UNKNOWN — {msg}")
             return 2
@@ -371,9 +371,9 @@ def main() -> int:
             ensure_ascii=False))
         return code
 
-    print(f"cortex-loop 期待清单 ｜ {DOC.relative_to(ROOT)}")
-    print(f"共 {len(items)} 条 ｜ met {counts['met']} · gap {counts['gap']} "
-          f"· unknown {counts['unknown']}")
+    print(f"cortex-loop expectations | {DOC.relative_to(ROOT)}")
+    print(f"{len(items)} items | met {counts['met']} | gap {counts['gap']} "
+          f"| unknown {counts['unknown']}")
     print("─" * 60)
     mark = {"met": "✅", "gap": "❌", "unknown": "❓"}
     cur = None
@@ -383,7 +383,7 @@ def main() -> int:
             print(f"\n▸ {cur}")
         head = i["fields"][0] if i["fields"] else ""
         print(f"  {mark[i['state']]} {i['id']} {head[:70]}")
-    print("\n退出码 0=全部 met · 1=有 gap · 2=有 unknown（判不出来 ≠ 通过）")
+    print("\nexit code 0=all met | 1=has gap | 2=has unknown (cannot tell is not a pass)")
     return code
 
 

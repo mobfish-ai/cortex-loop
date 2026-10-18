@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""资产健康扫描：Path(ROOT) 回归、计数漂移、过期阈值。只读，不联网。"""
+"""Asset-health scan: Path(ROOT) regression, count drift, stale threshold. Read-only, no network."""
 from __future__ import annotations
 
 import hashlib
@@ -73,15 +73,15 @@ def one(cands, cid):
 
 
 def assert_shape(cand, msg):
-    check(cand is not None and set(cand) == SHAPE, "%s 候选字段齐全" % msg)
+    check(cand is not None and set(cand) == SHAPE, "%s candidate fields are complete" % msg)
     if not cand:
         return
     check(cand["source"] == "asset-health", "%s source" % msg)
-    check(cand["min_trust"] == "L1", "%s 低信任 L1" % msg)
-    check(cand["reversible"] == "yes", "%s 可逆" % msg)
+    check(cand["min_trust"] == "L1", "%s low trust L1" % msg)
+    check(cand["reversible"] == "yes", "%s reversible" % msg)
     check(cand["requires"] == "exec.claude", "%s requires" % msg)
     check(cand["approved_by"] == "-", "%s approved_by" % msg)
-    check(SENTINEL not in json.dumps(cand, ensure_ascii=False), "%s 不含文件正文" % msg)
+    check(SENTINEL not in json.dumps(cand, ensure_ascii=False), "%s does not contain file body text" % msg)
 
 
 def run_short(cmd):
@@ -91,7 +91,7 @@ def run_short(cmd):
 
 
 def balanced_tree(root):
-    """与 fixtures/asset-health/registry.json 的 source 语法对齐的小树。"""
+    """A small tree aligned with the source syntax in fixtures/asset-health/registry.json."""
     files = {
         "skills/SKILLS-TAXONOMY.md": "taxonomy\n",
         "skills/alpha/ERRORS.md": SENTINEL + "\nalpha\n",
@@ -127,36 +127,39 @@ def balanced_tree(root):
 def test_root_stays_str():
     text = Path(ENGINE).read_text(encoding="utf-8")
     check(bool(__import__("re").search(r"^ROOT = os\.path\.dirname", text, __import__("re").M)),
-          "全局 ROOT 仍是 str 赋值")
-    check("ROOT = Path(" not in text, "没有把全局 ROOT 改成 Path")
-    check(isinstance(cl.ROOT, str), "装载后的 ROOT 是 str")
+          "global ROOT is still a str assignment")
+    check("ROOT = Path(" not in text, "global ROOT was not changed to Path")
+    check(isinstance(cl.ROOT, str), "loaded ROOT is a str")
 
 
 def test_predicate_boundaries():
-    # 恰好 2% 或恰好 3 个文件不报；大于任一才报。
-    check(not cl._asset_count_drifted(100, 102), "差 2 / 100 = 2% 不报")
-    check(cl._asset_count_drifted(100, 103), "差 3 / 100 > 2% 要报")
-    check(not cl._asset_count_drifted(200, 203), "差 3 且相对约 1.5% 不报")
-    check(cl._asset_count_drifted(200, 204), "差 4 虽不足 2% 也要报")
-    check(cl._asset_count_drifted(50, 52), "差 2 但相对 4% 要报（或，不是与）")
-    check(not cl._asset_count_drifted(0, 0), "登记 0 实扫 0 不报")
-    check(cl._asset_count_drifted(0, 1), "登记 0 实扫 1 相对越线要报")
-    check(cl.ASSET_HEALTH_STALE_DAYS == 30, "默认过期阈值 30 天")
-    check(abs(cl.ASSET_HEALTH_COUNT_REL - 0.02) < 1e-12, "相对阈值 2%")
-    check(cl.ASSET_HEALTH_COUNT_ABS == 3, "绝对阈值 3 个文件")
+    # Exactly 2% or exactly 3 files does not report; report only when either bound is exceeded.
+    check(not cl._asset_count_drifted(100, 102), "delta 2 / 100 = 2% does not report")
+    check(cl._asset_count_drifted(100, 103), "delta 3 / 100 > 2% reports")
+    check(not cl._asset_count_drifted(200, 203), "delta 3 and about 1.5% relative does not report")
+    check(cl._asset_count_drifted(200, 204), "delta 4 reports even though it is under 2%")
+    check(cl._asset_count_drifted(50, 52), "delta 2 but 4% relative reports (or, not and)")
+    check(not cl._asset_count_drifted(0, 0), "registered 0 scanned 0 does not report")
+    check(cl._asset_count_drifted(0, 1), "registered 0 scanned 1 reports because the relative bound is crossed")
+    check(cl.ASSET_HEALTH_STALE_DAYS == 30, "default stale threshold is 30 days")
+    check(abs(cl.ASSET_HEALTH_COUNT_REL - 0.02) < 1e-12, "relative threshold 2%")
+    check(cl.ASSET_HEALTH_COUNT_ABS == 3, "absolute threshold is 3 files")
 
 
 def test_glob_syntax():
     check(cl._asset_source_globs("bin/*.sh|py") == ["bin/*.sh", "bin/*.py"],
-          "扩展名竖线展开")
+          "extension bar expands")
+    # deliberate CJK fixture
     check(cl._asset_source_globs("skills/*/ERRORS.md（错题本，按域分布）")
-          == ["skills/*/ERRORS.md"], "中文括注剥掉")
+          == ["skills/*/ERRORS.md"], "Chinese parenthetical is stripped")
+    # deliberate CJK fixture
     check(cl._asset_source_globs("**/discovery-trees.jsonl + dt-*.md（发现树）")
-          == ["**/discovery-trees.jsonl", "**/dt-*.md"], "无斜杠的文件名通配按任意深度")
+          == ["**/discovery-trees.jsonl", "**/dt-*.md"], "a filename wildcard with no slash matches any depth")
+    # deliberate CJK fixture
     check(cl._asset_source_globs("cortex-harness 席 AAR-014 同批") == [],
-          "纯说明不是 glob")
+          "prose is not a glob")
     check(cl._asset_source_globs("skills/SKILLS-TAXONOMY.md")
-          == ["skills/SKILLS-TAXONOMY.md"], "具体文件也是可数 source")
+          == ["skills/SKILLS-TAXONOMY.md"], "a concrete file is also a countable source")
 
 
 def test_balanced_and_path_root():
@@ -174,45 +177,45 @@ def test_balanced_and_path_root():
 
         orig_socket = socket.socket
         socket.socket = Guard
-        cl.ROOT = str(root)  # 生产里 ROOT 就是 str；这里复现原来的 TypeError 路径
+        cl.ROOT = str(root)  # production ROOT is a str; this recreates the old TypeError path
         try:
             cands = cl.scan_asset_health(now=NOW)
         finally:
             cl.ROOT = saved
             socket.socket = orig_socket
-        check(blocked["calls"] == 0, "扫描不建 socket")
-        check(snapshot(root) == before, "扫描不改文件字节")
-        check(isinstance(cl.ROOT, str) and cl.ROOT == saved, "扫描不改全局 ROOT")
-        check("asset-health-count-tools" not in ids(cands), "对齐的 tools 计数不报")
-        check("asset-health-count-errors" not in ids(cands), "对齐的 errors 计数不报")
-        check("asset-health-count-ledgers" not in ids(cands), "跳过依赖目录后 ledgers 对齐")
-        check("asset-health-count-skills" not in ids(cands), "skills 具体文件计数对齐")
-        check("asset-health-count-discovery_trees" not in ids(cands), "发现树两条 glob 对齐")
-        check("asset-health-count-references" not in ids(cands), "references 目录下文件对齐")
-        check("asset-health-count-recipes" not in ids(cands), "recipes 目录加根文件去重对齐")
-        check("asset-health-count-agent_skins" not in ids(cands), "说明文字 source 不比计数")
-        check("asset-health-count-directions" not in ids(cands), "没有 source 的 count 不比")
-        check("asset-health-nodes" not in ids(cands), "引用文件存在则不报缺失")
-        check("asset-health-stale-registry" not in ids(cands), "未来的 updated_at 不算过期")
+        check(blocked["calls"] == 0, "the scan opens no socket")
+        check(snapshot(root) == before, "the scan does not change file bytes")
+        check(isinstance(cl.ROOT, str) and cl.ROOT == saved, "the scan does not change global ROOT")
+        check("asset-health-count-tools" not in ids(cands), "an aligned tools count does not report")
+        check("asset-health-count-errors" not in ids(cands), "an aligned errors count does not report")
+        check("asset-health-count-ledgers" not in ids(cands), "ledgers align after dependency directories are skipped")
+        check("asset-health-count-skills" not in ids(cands), "the concrete skills file count aligns")
+        check("asset-health-count-discovery_trees" not in ids(cands), "the two discovery-tree globs align")
+        check("asset-health-count-references" not in ids(cands), "files under references align")
+        check("asset-health-count-recipes" not in ids(cands), "recipes directory plus root file dedupe and align")
+        check("asset-health-count-agent_skins" not in ids(cands), "a prose source is not compared as a count")
+        check("asset-health-count-directions" not in ids(cands), "a count with no source is not compared")
+        check("asset-health-nodes" not in ids(cands), "an existing referenced file is not reported missing")
+        check("asset-health-stale-registry" not in ids(cands), "a future updated_at is not stale")
         blob = json.dumps(cands, ensure_ascii=False)
-        check(SENTINEL not in blob, "候选不含文件正文")
-        # 把 tools 登记改大，同一棵树应报漂移，且短测能被文件数修好。
+        check(SENTINEL not in blob, "candidates do not contain file body text")
+        # Raise the tools registration. The same tree must report drift, and the short test can be repaired by file count.
         reg = json.loads(reg_path.read_text(encoding="utf-8"))
         reg["segments"]["tools"]["count"] = 10
         write_json(reg_path, reg)
         cands = cl.scan_asset_health(root=root, now=NOW)
         cand = one(cands, "asset-health-count-tools")
-        assert_shape(cand, "tools 漂移")
+        assert_shape(cand, "tools drift")
         if cand:
-            check("登记 10，实扫 2" in cand["title"], "漂移标题带登记数和实扫数")
+            check("declared 10, scanned 2" in cand["title"], "the drift title carries the declared count and the scanned count")
             code, err = run_short(cand["short_test"])
-            check(code == 1, "漂移未修时短测失败 code=%s %s" % (code, err))
+            check(code == 1, "short test fails while drift is unfixed code=%s %s" % (code, err))
             (root / "bin" / "e.sh").write_text("echo e\n", encoding="utf-8")
-            # 原有 2 个 + 这 8 个 = 登记的 10。相对阈值 2% 在 10 这个分母上只允许差 0。
+            # The original 2 plus these 8 = the registered 10. A 2% relative threshold on a denominator of 10 allows a delta of 0.
             for i in range(7):
                 (root / "bin" / ("extra-%d.sh" % i)).write_text("echo\n", encoding="utf-8")
             code, err = run_short(cand["short_test"])
-            check(code == 0, "补齐文件后同一条短测通过 code=%s %s" % (code, err))
+            check(code == 0, "the same short test passes after the files are filled in code=%s %s" % (code, err))
 
 
 def test_or_on_filesystem():
@@ -231,10 +234,10 @@ def test_or_on_filesystem():
             })
             return ids(cl.scan_asset_health(root=root, registry_path=reg_path, now=NOW))
 
-        check("asset-health-count-batch" not in scan(200), "200=200 不报")
-        check("asset-health-count-batch" not in scan(203), "差 3 且相对不足 2% 不报")
-        check("asset-health-count-batch" in scan(204), "差 4 个文件要报")
-        check("asset-health-count-batch" in scan(190), "相对差大于 2% 要报")
+        check("asset-health-count-batch" not in scan(200), "200=200 does not report")
+        check("asset-health-count-batch" not in scan(203), "delta 3 and under 2% relative does not report")
+        check("asset-health-count-batch" in scan(204), "a delta of 4 files reports")
+        check("asset-health-count-batch" in scan(190), "a relative delta above 2% reports")
 
 
 def test_staleness_and_config():
@@ -249,7 +252,7 @@ def test_staleness_and_config():
         taxonomy.write_text("tax\n", encoding="utf-8")
         touch(nodes, NOW - timedelta(days=30))
         touch(taxonomy, NOW - timedelta(days=31))
-        # 注册表文件本身很旧，但 updated_at 字段是新的：只看字段，不看 mtime。
+        # The registry file itself is old, but the updated_at field is new: look at the field, not the mtime.
         write_json(reg_path, {
             "_meta": {"updated_at": "2026-10-15T12:00:00Z"},
             "segments": {
@@ -269,46 +272,46 @@ def test_staleness_and_config():
                 os.environ.pop("CORTEX_ASSET_HEALTH_STALE_DAYS", None)
             else:
                 os.environ["CORTEX_ASSET_HEALTH_STALE_DAYS"] = old
-        check("asset-health-stale-nodes" not in ids(cands), "恰好 30 天不算过期")
+        check("asset-health-stale-nodes" not in ids(cands), "exactly 30 days is not stale")
         cand = one(cands, "asset-health-stale-skills")
-        assert_shape(cand, "skills 引用过期")
+        assert_shape(cand, "skills reference stale")
         if cand:
-            check(cand["value"] == "V1", "过期候选价值 V1")
-            check("skills/SKILLS-TAXONOMY.md" in cand["title"], "过期标题点名引用文件")
+            check(cand["value"] == "V1", "stale candidate value V1")
+            check("skills/SKILLS-TAXONOMY.md" in cand["title"], "the stale title names the referenced file")
             code, err = run_short(cand["short_test"])
-            check(code == 1, "过期未修时短测失败 code=%s %s" % (code, err))
+            check(code == 1, "short test fails while stale is unfixed code=%s %s" % (code, err))
             touch(taxonomy, datetime.now().astimezone())
             code, err = run_short(cand["short_test"])
-            check(code == 0, "刷新 mtime 后短测通过 code=%s %s" % (code, err))
-        check("asset-health-stale-registry" not in ids(cands), "updated_at 新鲜时不因文件 mtime 报注册表过期")
-        check("asset-health-escape" not in ids(cands), "拒绝跳出根目录的引用")
-        check("asset-health-absolute" not in ids(cands), "拒绝绝对路径引用")
+            check(code == 0, "short test passes after mtime is refreshed code=%s %s" % (code, err))
+        check("asset-health-stale-registry" not in ids(cands), "a fresh updated_at does not report the registry stale because of file mtime")
+        check("asset-health-escape" not in ids(cands), "a reference that escapes the root is rejected")
+        check("asset-health-absolute" not in ids(cands), "an absolute-path reference is rejected")
         blob = json.dumps(cands, ensure_ascii=False)
-        check("/etc/passwd" not in blob and "passwd" not in blob, "候选不带越界路径")
-        # 注册表字段过期，文件 mtime 不动。
+        check("/etc/passwd" not in blob and "passwd" not in blob, "candidates do not carry an out-of-root path")
+        # The registry field is stale; the file mtime is left alone.
         reg = json.loads(reg_path.read_text(encoding="utf-8"))
         reg["_meta"]["updated_at"] = "2026-09-14T12:00:00+00:00"
         write_json(reg_path, reg)
-        touch(reg_path, NOW)  # 文件是新的，字段是旧的
+        touch(reg_path, NOW)  # the file is new, the field is old
         cands = cl.scan_asset_health(root=root, now=NOW)
         meta = one(cands, "asset-health-stale-registry")
-        assert_shape(meta, "注册表 updated_at 过期")
+        assert_shape(meta, "registry updated_at stale")
         if meta:
-            check(meta["value"] == "V1", "注册表过期价值 V1")
+            check(meta["value"] == "V1", "stale registry value V1")
             code, err = run_short(meta["short_test"])
-            check(code == 1, "updated_at 过期时短测失败 code=%s %s" % (code, err))
+            check(code == 1, "short test fails when updated_at is stale code=%s %s" % (code, err))
             reg["_meta"]["updated_at"] = datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S%z")
             write_json(reg_path, reg)
             code, err = run_short(meta["short_test"])
-            check(code == 0, "改 updated_at 后短测通过 code=%s %s" % (code, err))
-        # 垃圾时间戳是未知，不当成过期。
+            check(code == 0, "short test passes after updated_at is edited code=%s %s" % (code, err))
+        # An unparseable timestamp is unknown, not stale.
         reg["_meta"]["updated_at"] = "not-a-date"
         write_json(reg_path, reg)
         cands = cl.scan_asset_health(root=root, now=NOW)
         check("asset-health-stale-registry" not in ids(cands)
               and "asset-health-stale-registry-updated-at" not in ids(cands),
-              "解析不了的 updated_at 不报过期")
-        # 阈值可配置：15 天的文件，默认 30 不报，10 天要报；显式参数压过环境变量。
+              "an updated_at that cannot be parsed does not report stale")
+        # The threshold is configurable: a 15-day file is quiet at the default 30 and reports at 10; an explicit argument beats the environment variable.
         touch(nodes, NOW - timedelta(days=15))
         os.environ["CORTEX_ASSET_HEALTH_STALE_DAYS"] = "10"
         try:
@@ -319,9 +322,9 @@ def test_staleness_and_config():
                 os.environ.pop("CORTEX_ASSET_HEALTH_STALE_DAYS", None)
             else:
                 os.environ["CORTEX_ASSET_HEALTH_STALE_DAYS"] = old
-        # via_bad 仍在 env=10 的 try 里。15 天 > 10。
-        check("asset-health-stale-nodes" in ids(via_env), "环境变量把阈值改成 10 天后要报")
-        check("asset-health-stale-nodes" not in ids(via_arg), "显式 stale_days 压过环境变量")
+        # via_bad is still inside the env=10 try. 15 days > 10.
+        check("asset-health-stale-nodes" in ids(via_env), "after the environment variable sets the threshold to 10 days it reports")
+        check("asset-health-stale-nodes" not in ids(via_arg), "an explicit stale_days beats the environment variable")
         os.environ["CORTEX_ASSET_HEALTH_STALE_DAYS"] = "nope"
         try:
             via_bad_env = cl.scan_asset_health(root=root, now=NOW)
@@ -329,17 +332,17 @@ def test_staleness_and_config():
             os.environ.pop("CORTEX_ASSET_HEALTH_STALE_DAYS", None)
             if old is not None:
                 os.environ["CORTEX_ASSET_HEALTH_STALE_DAYS"] = old
-        check("asset-health-stale-nodes" not in ids(via_bad_env), "非法环境变量回落 30 天")
+        check("asset-health-stale-nodes" not in ids(via_bad_env), "an illegal environment variable falls back to 30 days")
 
 
 def test_missing_index_and_discover():
     with tempfile.TemporaryDirectory(prefix="asset-health-disc-") as tmp:
         root = Path(tmp)
-        check(cl.scan_asset_health(root=root, now=NOW) == [], "没有注册表就没有候选")
+        check(cl.scan_asset_health(root=root, now=NOW) == [], "no registry means no candidates")
         reg_path = root / "work-studio/devops/infrastructure/data/cortex-asset-registry.json"
         reg_path.parent.mkdir(parents=True, exist_ok=True)
         reg_path.write_text("{", encoding="utf-8")
-        check(cl.scan_asset_health(root=root, now=NOW) == [], "坏 JSON 不抛、不报")
+        check(cl.scan_asset_health(root=root, now=NOW) == [], "bad JSON does not raise and does not report")
         write_json(reg_path, {
             "_meta": {"updated_at": "2099-01-01T00:00:00Z"},
             "segments": {
@@ -349,29 +352,29 @@ def test_missing_index_and_discover():
         })
         cands = cl.scan_asset_health(root=root, now=NOW)
         cand = one(cands, "asset-health-nodes")
-        assert_shape(cand, "缺失引用")
+        assert_shape(cand, "missing reference")
         if cand:
-            check(cand["value"] == "V2", "缺失引用价值 V2")
+            check(cand["value"] == "V2", "missing-reference value V2")
             check(cand["bounds"] == "work-studio/devops/infrastructure/data/nodes-registry.json",
-                  "缺失引用 bounds 是相对路径")
+                  "missing-reference bounds is a relative path")
             code, _err = run_short(cand["short_test"])
-            check(code != 0, "文件还缺着时短测失败")
+            check(code != 0, "the short test fails while the file is still missing")
             target = root / cand["bounds"]
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text("{}\n", encoding="utf-8")
             code, _err = run_short(cand["short_test"])
-            check(code == 0, "补上文件后短测通过")
+            check(code == 0, "the short test passes after the file is added")
         index = root / "work-studio/devops/infrastructure/data/verb-task-index.md"
         index.write_text("index\n", encoding="utf-8")
         touch(index, NOW - timedelta(hours=169))
         cands = cl.scan_asset_health(root=root, now=NOW)
         index_cand = one(cands, "asset-health-index-stale")
-        assert_shape(index_cand, "索引过期")
+        assert_shape(index_cand, "index stale")
         touch(index, NOW - timedelta(hours=167))
         cands = cl.scan_asset_health(root=root, now=NOW)
-        check("asset-health-index-stale" not in ids(cands), "索引不足 7 天不报")
-        # discover_candidates 会把这条扫描接进去。其它扫描器全部关掉。
-        # 上面为了短测把引用文件补上了，这里拿掉，缺失候选才会重新出现。
+        check("asset-health-index-stale" not in ids(cands), "an index younger than 7 days does not report")
+        # discover_candidates wires this scan in. Every other scanner is turned off.
+        # The short test above put the referenced file back; remove it here so the missing candidate appears again.
         target = root / "work-studio/devops/infrastructure/data/nodes-registry.json"
         if target.exists():
             target.unlink()
@@ -393,22 +396,22 @@ def test_missing_index_and_discover():
             cl.SCANNERS = saved_scanners
             for name, fn in saved.items():
                 setattr(cl, name, fn)
-        check("asset-health-nodes" in ids(found), "discover_candidates 带上缺失引用")
-        check(cl.ROOT == saved_root and isinstance(cl.ROOT, str), "discover 之后全局 ROOT 仍是原来的 str")
+        check("asset-health-nodes" in ids(found), "discover_candidates includes the missing reference")
+        check(cl.ROOT == saved_root and isinstance(cl.ROOT, str), "after discover, global ROOT is still the original str")
 
 
 def test_directory_source_is_not_a_full_tree():
     with tempfile.TemporaryDirectory(prefix="asset-health-dir-") as tmp:
         root = Path(tmp)
         reg_path = root / "reg.json"
-        # 具体目录：直接子项 2 个（a.txt + sub），嵌套文件和隐藏文件不算。
+        # A concrete directory: 2 direct children (a.txt + sub). Nested files and hidden files do not count.
         (root / "pack").mkdir()
         (root / "pack/a.txt").write_text("a\n", encoding="utf-8")
         (root / "pack/.hidden.txt").write_text(SENTINEL + "\n", encoding="utf-8")
         (root / "pack/sub").mkdir()
         (root / "pack/sub/c.txt").write_text("c\n", encoding="utf-8")
         (root / "pack/sub/d.txt").write_text("d\n", encoding="utf-8")
-        # 带通配符的目录：数目录本身。两个 references 里一共 3 个文件，登记 2 仍对齐。
+        # A wildcard directory: count the directory itself. Two references hold 3 files in total; registering 2 still aligns.
         for name, body in (
             ("skills/alpha/references/a.md", "a\n"),
             ("skills/beta/references/b.md", "b\n"),
@@ -427,15 +430,15 @@ def test_directory_source_is_not_a_full_tree():
             },
         })
         cands = cl.scan_asset_health(root=root, registry_path=reg_path, now=NOW)
-        check("asset-health-count-directions" not in ids(cands), "具体目录只数直接子项")
-        check("asset-health-count-references" not in ids(cands), "通配目录数目录，不数里面的文件")
-        check("asset-health-count-discovery_trees" not in ids(cands), "dt-*.md 匹配子目录里的文件")
-        check(SENTINEL not in json.dumps(cands, ensure_ascii=False), "隐藏文件正文不进候选")
+        check("asset-health-count-directions" not in ids(cands), "a concrete directory counts only direct children")
+        check("asset-health-count-references" not in ids(cands), "a wildcard directory counts directories, not the files inside")
+        check("asset-health-count-discovery_trees" not in ids(cands), "dt-*.md matches files in subdirectories")
+        check(SENTINEL not in json.dumps(cands, ensure_ascii=False), "hidden-file body text does not enter candidates")
         reg = json.loads(reg_path.read_text(encoding="utf-8"))
         reg["segments"]["directions"]["count"] = 9
         write_json(reg_path, reg)
         cands = cl.scan_asset_health(root=root, registry_path=reg_path, now=NOW)
-        check("asset-health-count-directions" in ids(cands), "直接子项对不上才报漂移")
+        check("asset-health-count-directions" in ids(cands), "drift is reported only when direct children do not match")
 
 
 def test_dot_claude_is_counted():
@@ -454,7 +457,7 @@ def test_dot_claude_is_counted():
         })
         cands = cl.scan_asset_health(root=root, registry_path=reg_path, now=NOW)
         check("asset-health-count-ledgers" not in ids(cands),
-              ".claude 计入、node_modules 不计入")
+              ".claude counts, node_modules does not")
 
 
 def main():

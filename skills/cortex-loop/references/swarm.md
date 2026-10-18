@@ -1,77 +1,79 @@
-# cortex-loop 蜂群机制（多节点同写一个 git 账本）
+English | [简体中文](swarm.zh-CN.md)
 
-> **何时该读**：多机协作出问题（谁该管这条线 / 两台机同时动 / 判某台机掉没掉线 / 该不该接管），
-> 或要往蜂群里加一台新机器。
-> **上级**：[[cortex-loop/SKILL|SKILL.md]] · **命令**：[[cortex-loop/references/commands|commands.md]] §蜂群协调 / §去中心化分发
+# cortex-loop swarm mechanism (many nodes writing one git ledger)
 
----
-
-**问题**：多节点同写一个 git 账本 = 冲突源。
-**解法不是共识算法，是分片 + CAS 租约。**
+> **When to read this**: multi-machine coordination is in trouble (who should own this line / two machines moving at once / judging whether a machine dropped offline / whether to take over),
+> or you are adding a new machine to the swarm.
+> **Parent**: [[cortex-loop/SKILL|SKILL.md]] · **commands**: [[cortex-loop/references/commands|commands.md]] §swarm coordination / §decentralized dispatch
 
 ---
 
-## ① owner 分片（防日常打架）
+**The problem**: many nodes writing one git ledger is a conflict source.
+**The solution is not a consensus algorithm. It is sharding plus a CAS lease.**
 
-`CLOCK.owner` 给每条线指定唯一负责节点 → **天然单写者**，git 不打架。
-非 owner 节点 tick 时直接 `skip | X 归 Y 管`。
+---
 
-## ② git ref CAS 租约（防脑裂 · 零外部依赖）
+## 1. Owner sharding (stop the everyday fight)
 
-> **核心洞见**：`git push` 更新远端 ref 本身就是**原子 compare-and-swap**。两个节点拿同一 parent 造 commit 同时推，服务器只让一个 fast-forward 成功，另一个必被 `[rejected] non-fast-forward`。**语义等价 Redis SETNX，零外部服务。**
+`CLOCK.owner` assigns each line a single responsible node → **a natural single writer**, so git does not fight.
+A non-owner node `skip`s on tick: `skip | X is owned by Y`.
 
-- 命名空间：`refs/swarm/lease/<line>`（租约）· `refs/swarm/beat/<node>`（心跳）
-- 每个节点只推自己的 beat ref → 结构上不可能撞
-- 全程 git plumbing（`hash-object` / `mktree` / `commit-tree`），**不 checkout、不碰工作区**
-- 为什么必须走 ref 层：worker 实况 267 文件未提交、auto-sync 已坏，任何 pull/rebase/checkout 都被脏树挡住 → 蜂群跟着瞎
+## 2. Git ref CAS lease (stop split brain · zero external dependency)
 
-> CAS 拒绝与网络故障**必须分开**，压成同一个返回值就是 [[cortex-loop/ERRORS|E009]]（[[dimensional-expansion-doctrine|DIMENSIONAL 律]] 母题）。
+> **Core insight**: `git push` updating a remote ref is itself an **atomic compare-and-swap**. Two nodes build a commit from the same parent and push at the same time. The server lets only one fast-forward succeed. The other is necessarily `[rejected] non-fast-forward`. **Semantically equivalent to Redis SETNX, with zero external services.**
 
-## ③ can_sleep 差异化静默阈值（防误判）
+- Namespaces: `refs/swarm/lease/<line>` (lease) · `refs/swarm/beat/<node>` (heartbeat)
+- Each node pushes only its own beat ref → a collision is structurally impossible
+- The whole path is git plumbing (`hash-object` / `mktree` / `commit-tree`). **No checkout, and the worktree is not touched**
+- Why it must go through the ref layer: the worker's live state was 267 uncommitted files and a broken auto-sync. Any pull/rebase/checkout is blocked by the dirty tree → the swarm goes blind with it
 
-`loop_node` 画像自动探测：有电池=laptop 会睡；无电池或 `SleepDisabled=1` = always-on。
+> A CAS rejection and a network fault **must be separated**. Flattening them into one return value is [[cortex-loop/ERRORS|E009]] (the [[dimensional-expansion-doctrine|DIMENSIONAL law]] root pattern).
 
-| 节点类型 | 静默正常阈值 | 可接管阈值（2 倍缓冲） |
+## 3. can_sleep differentiated silence thresholds (stop misjudgment)
+
+The `loop_node` profile detects this automatically: a battery means a laptop that sleeps; no battery, or `SleepDisabled=1`, means always-on.
+
+| Node type | Silence that is still normal | Takeover threshold (2× buffer) |
 |----------|-------------|----------------------|
-| `can_sleep=yes`（笔记本） | 14h（合盖过夜属正常） | 28h |
-| `can_sleep=no`（常开机） | 3h | 6h |
+| `can_sleep=yes` (laptop) | 14h (lid closed overnight is normal) | 28h |
+| `can_sleep=no` (always on) | 3h | 6h |
 
-**接管须超阈值 2 倍**——宁可晚接管，不可抢了又还回去（**抖动比停摆更伤**）。
-接管者 = 存活节点按名字排序第一个（无需选举，确定性）。
-`last_seen` 取**整点精度** → 一小时内重复心跳文件无 diff → 蜂群不制造 commit 噪音。
+**Takeover must exceed the threshold by 2×** — better to take over late than to seize it and hand it back (**flapping hurts more than a stall**).
+The taker is the first surviving node in name order (no election; deterministic).
+`last_seen` is taken at **hour precision** → a repeated heartbeat inside one hour has no file diff → the swarm does not manufacture commit noise.
 
-> 「日志连续」不等于「一直在跑」——笔记本合盖 launchd 会停跳（[[cortex-loop/ERRORS|E007]]）。
-> 所以 `idle` 的分母只含**真跑过的拍**，不是墙钟。
+> "The log is continuous" is not "it has been running the whole time" — a closed laptop lid makes launchd stop firing ([[cortex-loop/ERRORS|E007]]).
+> So the `idle` denominator contains only **ticks that actually ran**, not wall clock.
 
-## ④ 会话死亡自动接管（HIVE R·Resume 机械化）
+## 4. Automatic takeover when a session dies (HIVE R·Resume made mechanical)
 
-环**不认识会话是怎么死的**（API 断连 / 撞额度 / 机器睡了），只认「`running` 超 `stall_min`（默认 45min）没动静」→ 收回重推。
-**接管的不是那个会话，是外部时钟。**
+The loop **does not know how the session died** (API disconnect / quota hit / the machine slept). It only recognizes "`running` has been quiet past `stall_min` (default 45min)" → reclaim and re-push.
+**What takes over is not that session. It is the external clock.**
 
-对应 [[hive-doctrine|HIVE 律]] 的 R·Resume —— 律说「重连第一件事是续传」，这里把它变成不依赖任何人记得的机械动作。
+This is R·Resume in [[hive-doctrine|HIVE law]] — the law says "the first thing on reconnect is to resume". Here that becomes a mechanical action that does not depend on anyone remembering.
 
-## ⑤ 多 Runtime 执行隔离（防共享 worktree 打架）
+## 5. Multi-runtime execution isolation (stop the shared-worktree fight)
 
-- ref 层负责 claim/lease/result；不得拿 Git 全局锁包住 Agent 生命周期。
-- 每个 attempt 使用唯一稀疏 linked worktree，Git objects 共用一份但 index/worktree 不共用。
-- Candidate 发布到 `refs/cortex/candidate/<attempt>/<oid>`，不可变、可跨节点消费。
-- Integrator 是唯一逻辑 lander，但它不是长生命周期全局锁：每次只对 observed master tip 做一次 server-side CAS。
-- CAS loser 返回 retryable，基于最新 tip 重放；路径/语义冲突才 blocked，不把正常竞争算执行失败。
-- 结算成功立即回收 clean workspace；脏舱、foreign/live owner、身份不符全部 fail-closed。
+- The ref layer owns claim/lease/result. Do not wrap an Agent lifetime in a global Git lock.
+- Each attempt uses a unique sparse linked worktree. Git objects are shared; the index and worktree are not.
+- A Candidate is published to `refs/cortex/candidate/<attempt>/<oid>`, immutable and consumable across nodes.
+- The Integrator is the only logical lander, and it is not a long-lived global lock: each time it does one server-side CAS against the observed master tip.
+- A CAS loser returns retryable and replays against the latest tip. Only a path or semantic conflict is blocked. Ordinary contention is not counted as an execution failure.
+- A successful settlement immediately reclaims a clean workspace. A dirty cabin, a foreign/live owner, or an identity mismatch is fail-closed.
 
 ---
 
-## 主线程在蜂群里的身位
+## The main thread's seat in the swarm
 
-同一台机上「跑 tick 的」和「跟人对话的」是两个节点：
+On the same machine, "the one running tick" and "the one talking to a person" are two nodes:
 
-| 节点 | kind | 说明 |
+| Node | kind | Meaning |
 |------|------|------|
-| `<host>` | executor | launchd 拉起的自动执行体 |
-| `orchestrator-<host>` | orchestrator | 人机接口，非执行体。用 `checkin` 接入 / `checkin --out` 退出 |
+| `<host>` | executor | the automatic executor started by launchd |
+| `orchestrator-<host>` | orchestrator | the human-machine interface, not an executor. Join with `checkin` / leave with `checkin --out` |
 
-编排者也要被信任机制约束 → `fault`（自记违约）+ `credit`（记自主做成）双向计分。
-真相源见 [[cortex-loop/references/architecture|architecture.md]] §六定律三关 · 律侧见 [[steer-doctrine|STEER]]。
+The orchestrator must also be bound by the trust mechanism → two-way scoring with `fault` (record one's own breach) + `credit` (record an autonomous completion).
+Source of truth: [[cortex-loop/references/architecture|architecture.md]] §six-law three gates · the law side is [[steer-doctrine|STEER]].
 
 ---
 
@@ -82,4 +84,4 @@
 ---
 
 <!-- cortex:map-backlink d-66b637004ace09ce92612c5c -->
-关联地图：[[skills/cortex-loop/MAP|Cortex Loop 全景地图]]
+Related map: [[skills/cortex-loop/MAP|Cortex Loop panorama]]

@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-# 本 fixture 专测“缺源=UNKNOWN”，不得继承真实生产 guardrail 账本。
+# This fixture tests "missing source = UNKNOWN" and must not inherit the real production guardrail ledger.
 os.environ["CORTEX_OPENCLAW_STATE"] = "/tmp/cortex-metric-window-missing-%d" % os.getpid()
 spec = importlib.util.spec_from_file_location("cortex_metrics", ROOT / "bin/cortex-metrics.py")
 metrics = importlib.util.module_from_spec(spec)

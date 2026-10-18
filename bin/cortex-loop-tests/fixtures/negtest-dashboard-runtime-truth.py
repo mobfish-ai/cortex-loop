@@ -84,17 +84,17 @@ with tempfile.TemporaryDirectory(prefix="cortex-dashboard-runtime-") as tmp:
         "state": "OK",
         "events": [{
             "node": "orchestrator-laptop", "kind": "mechanism-adopted",
-            "label": "L5 采纳", "corrected_target": "worker-loop",
+            "label": "L5 adopted", "corrected_target": "worker-loop",
             "evidence": "reports/fixture-mechanism.md",
             "finished": "2026-08-01T12:00:00Z",
         }],
         "by_node": {},
     }) + "\n", encoding="utf-8")
     trust_table.write_text(
-        "| 节点 | HAAS | 等级 | 自动执行 | 依据 |\n"
+        "| node | HAAS | level | auto-run | basis |\n"
         "|------|------|------|----------|------|\n"
-        "| orchestrator-laptop | 0.650 | L2 | 建议为主 | fixture |\n"
-        "| laptop | 0.470 | L1 | 每步确认 | fixture |\n",
+        "| orchestrator-laptop | 0.650 | L2 | suggest-only | fixture |\n"
+        "| laptop | 0.470 | L1 | confirm each step | fixture |\n",
         encoding="utf-8",
     )
 
@@ -161,7 +161,7 @@ with tempfile.TemporaryDirectory(prefix="cortex-dashboard-runtime-") as tmp:
             "unknown": 0,
             "fails": 6,
             "tasks_with_fails": 3,
-            # 未终态且 fails>0 全算 open（含 blocked/waiting，不限 pending/running）
+            # Every non-terminal row with fails>0 counts as open (including blocked/waiting, not only pending/running)
             "open_fails": 6,
             "open_tasks_with_fails": 3,
             "sentinel": 0,
@@ -210,25 +210,25 @@ with tempfile.TemporaryDirectory(prefix="cortex-dashboard-runtime-") as tmp:
         "human view focuses running/fails and removes duplicate ledger block",
         (
             "TASKS.md" in human.stdout
-            and "正在执行 1" in human.stdout
+            and "running 1" in human.stdout
             and "cortex-immune/IMM-T1" in human.stdout
-            and "累计拒绝 6 次" in human.stdout
-            and "━━ 当前任务" in human.stdout
-            and "【 账本 】" not in human.stdout
+            and "cumulative rejections 6" in human.stdout
+            and "━━ current tasks" in human.stdout
+            and "[ ledger ]" not in human.stdout
         ),
         human.stdout[-1200:],
     )
     check(
         "human view shows launchd runs and last exit",
-        "已运行 42 拍" in human.stdout and "上一拍异常 7" in human.stdout,
+        "ran 42 ticks" in human.stdout and "previous tick error 7" in human.stdout,
         human.stdout[-1200:],
     )
     check(
         "human view shows node scores and mechanism upgrade board",
         "0.650 L2" in human.stdout
         and "0.470 L1" in human.stdout
-        and "━━ 机制红榜" in human.stdout
-        and "L5 采纳" in human.stdout
+        and "━━ mechanism board" in human.stdout
+        and "L5 adopted" in human.stdout
         and "worker-loop" in human.stdout,
         human.stdout[-1200:],
     )

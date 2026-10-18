@@ -1,7 +1,7 @@
-"""把 bin/cortex-loop（无扩展名的 python3 引擎）当模块加载，供测试直接调内部函数。
+"""Load bin/cortex-loop (the extensionless python3 engine) as a module so tests can call internals directly.
 
-用 SourceFileLoader 而不是 import：文件名带连字符且无 .py，普通 import 语法进不来。
-模块名给 "cortexloop" 而非 "__main__" → 引擎末尾的 main() 守卫不会触发。
+Use SourceFileLoader instead of import: the filename has a hyphen and no .py, so a normal import cannot load it.
+Name the module "cortexloop" rather than "__main__" so the main() guard at the end of the engine does not run.
 """
 
 import importlib.machinery
@@ -19,7 +19,7 @@ def load():
     return module
 
 
-# ── 测试自用的极简断言（失败即非 0 退出，理由打到 stdout）────────────────
+# -- minimal assertions for tests (a failure exits non-zero and prints the reason to stdout) --
 
 FAILURES = []
 
@@ -34,6 +34,6 @@ def check(label, condition, detail=""):
 
 def finish():
     if FAILURES:
-        print("断言失败 %d 条：%s" % (len(FAILURES), " / ".join(FAILURES)))
+        print("assertion failed %d: %s" % (len(FAILURES), " / ".join(FAILURES)))
         raise SystemExit(1)
     raise SystemExit(0)

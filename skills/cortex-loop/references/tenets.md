@@ -1,50 +1,52 @@
-# cortex-loop 置顶铁律 T1–T9（全文 · 含真实代价）
+English | [简体中文](tenets.zh-CN.md)
 
-> **何时该读**：SKILL.md 的 T1–T9 速查表只给「铁律 + 机械门」；
-> 想知道**每条是被什么代价换来的**（哪次踩坑、哪个 commit、对应哪条 ERRORS）时读本文。
-> **上级**：[[cortex-loop/SKILL|SKILL.md]] §置顶铁律 · **错题本**：[[cortex-loop/ERRORS|ERRORS.md]]
+# cortex-loop pinned hard rules T1–T9 (full text · including the real cost)
+
+> **When to read this**: the T1–T9 quick table in SKILL.md gives only "the hard rule + the mechanical gate".
+> Read this when you want **what each rule cost** (which pitfall, which commit, which ERRORS entry).
+> **Parent**: [[cortex-loop/SKILL|SKILL.md]] §pinned hard rules · **error log**: [[cortex-loop/ERRORS|ERRORS.md]]
 
 ---
 
-这 9 条不是"最佳实践"，是从 15 条 ERRORS 里反复现形的**同几个根因**提炼出来的。
-每条都配了机械门 —— 靠人记必然复发，同一根因两天内咬过三次就是证据。
-T1–T6 立于 2026-07-28（`c858a9ef9`）；**T7–T9 立于 2026-07-29**，因为这天多出了 07-28 还不存在的三个层：
-三态判断（[[cortex-loop/ERRORS|E013]]）、跨机传播（传播门）、信任计分（[[cortex-loop/ERRORS|E014]]）。
+These 9 rules are not "best practices". They are distilled from **the same few root causes** that kept reappearing across 15 ERRORS entries.
+Each one has a mechanical gate — relying on memory guarantees a relapse, and the same root cause biting three times inside two days is the evidence.
+T1–T6 were set on 2026-07-28 (`c858a9ef9`); **T7–T9 were set on 2026-07-29**, because that day added three layers that did not exist on 07-28:
+three-state judgment ([[cortex-loop/ERRORS|E013]]), cross-machine propagation (the propagation gate), and trust scoring ([[cortex-loop/ERRORS|E014]]).
 
-| # | 铁律 | 为什么（真实代价） | 机械门 |
+| # | Hard rule | Why (the real cost) | Mechanical gate |
 |---|------|-------------------|--------|
-| **T1** | **Runtime 无关**：引擎不认识任何具体 runtime，能力/需求由 adapter **自声明**，加新 runtime 只改 adapter 不改引擎 | 硬编码 `claude`/`ANTHROPIC_*` 会让接 Codex/Gemini/自研时改到引擎核心 | `env-parity.sh` 从 `# cortex-loop:requires-env` 自声明取需求，零硬编码 |
-| **T2** | **跨环境一致性**：交互式 shell 能跑 ≠ 无人值守能跑。调度器不继承登录 shell 环境 | 一晚三次：ollama 断 79%、worker 全线 `Not logged in`、Mac 7 次 403 | `bash bin/cortex-loop-tests/env-parity.sh` |
-| **T3** | **失败关闭，不是失败开放**：验证器自己没跑起来 ≠ 内容通过；看不清就判拒绝 | E011：验证器遇 502 报错，旧逻辑「没看到 REJECT 就当 ACCEPT」放行了假完成 | `ai_judge` 见 `[ADAPTER_FAILED]`/空输出直接 REJECT |
-| **T4** | **判据要问「这一条具体的事变了没」**，不能问「重跑会不会报错」 | E011：扫描器 WARN 不影响退出码 → 任务永远"通过"，不管有没有真修 | `short_test` 用否定判据 `! (<扫描器> \| grep -qF <具体项>)` |
-| **T5** | **静默降级比报错更危险**：任何"降级/退回/兜底"必须出声 | 本项目 DNA 第 1-9 次现形（E001/E002/E003/E005/E008/E009/E011…）全是"退出码 0、日志正常、功能已坏" | 退回快照必告警；push 失败打 stderr；`run_adapter` 非零退出加 `[ADAPTER_FAILED]` 前缀 |
-| **T6** | **占位符 `-` 是合法值不是路径**：凡读 `-` 约定的地方都要显式排除 | 同类 bug 两次现形：`requires="-"` 被当能力名、`artifact="-"` 被当文件路径 | `fit_score`/`covenant_check`/机械门三处均已加例外 |
-| **T7** | **三态不是二态**：「查不到」必须独立于「没有」，**UNKNOWN 绝不倒向任何一边** | E013 单日**五处**现形：`read_ref`/`list_refs` 读空当没有、gate 把 scope-gap 压成 FAIL、`ai_judge` 把 SCOPE 压成 REJECT、health 分类器跨版本失效当健康 | `bash bin/cortex-loop-tests/dimensional-collapse-scan.sh`（已接入 suite）· 全部探针退出码 0/1/**2** |
-| **T8** | **完成 = 传播到别人看得见的地方**：只躺在本机磁盘上的产出不算完成 | 幽灵完成 real1/R2 —— worker 判 done，产出从没进过 git 历史，蜂群里没人看得见（`54b1dd836`）；v1 只查 `git log -1 -- <path>` 非空，被真机当场打脸（`28f7d5d41`） | 传播门 v2：查 artifact **是否进了 origin 可达的历史**，不是本地有文件就算 |
-| **T9** | **信任只能由真实变化换来**：判据本来就满足的重跑 = 空转，既不加分也不扣分 | E014：17 条一次放行，事后查出 7 条是空转刷分 —— **在信任 L1 的阶段用了抽检的严格度**（`0f167ca4d` / `d121dc721`） | 空转门在烧额度前拦掉 + 第四态 `moot` 独立命名空间（不进功劳账）+ 查验强度按信任分档（全检/抽检/免检） |
+| **T1** | **Runtime-agnostic**: the engine knows no concrete runtime. Capability and requirements are **self-declared** by the adapter. Adding a runtime changes only the adapter, not the engine | hardcoding `claude` / `ANTHROPIC_*` would force an engine-core edit when wiring Codex, Gemini, or an in-house runtime | `env-parity.sh` takes requirements from the `# cortex-loop:requires-env` self-declaration, zero hardcoding |
+| **T2** | **Cross-environment parity**: an interactive shell can run it does not mean unattended can run it. A scheduler does not inherit the login shell environment | three times in one night: ollama died at 79%, the worker line was entirely `Not logged in`, the Mac hit 403 seven times | `bash bin/cortex-loop-tests/env-parity.sh` |
+| **T3** | **Fail closed, not fail open**: the verifier itself failing to run is not content passing; if you cannot see it, reject it | E011: the verifier hit a 502, and the old logic "no REJECT seen, so ACCEPT" let a false completion through | `ai_judge` sees `[ADAPTER_FAILED]` or empty output and REJECTs immediately |
+| **T4** | **A criterion must ask "did this specific thing change"**. It must not ask "will a rerun report an error" | E011: a scanner WARN does not affect the exit code → the task "passes" forever, whether or not it was really fixed | `short_test` uses a negative criterion `! (<scanner> \| grep -qF <specific item>)` |
+| **T5** | **Silent degradation is more dangerous than an error**: every "degrade / fall back / catch-all" must make a sound | occurrences 1–9 of this project's DNA (E001/E002/E003/E005/E008/E009/E011…) are all "exit code 0, logs look normal, the function is already broken" | falling back to a snapshot must warn; a push failure goes to stderr; a non-zero `run_adapter` exit adds an `[ADAPTER_FAILED]` prefix |
+| **T6** | **The placeholder `-` is a legal value, not a path**: every place that reads the `-` convention must exclude it explicitly | the same class of bug appeared twice: `requires="-"` was treated as a capability name, `artifact="-"` was treated as a file path | `fit_score` / `covenant_check` / the three mechanical gates all have the exception |
+| **T7** | **Three states, not two**: "cannot tell" must be independent of "absent". **UNKNOWN never collapses toward either side** | E013 appeared in **five places** in one day: `read_ref` / `list_refs` treated a read of empty as absent, a gate flattened scope-gap into FAIL, `ai_judge` flattened SCOPE into REJECT, and a health classifier that failed across versions was treated as healthy | `bash bin/cortex-loop-tests/dimensional-collapse-scan.sh` (wired into the suite) · every probe exits 0/1/**2** |
+| **T8** | **Done means propagated to a place others can see**: output that only sits on the local disk is not done | ghost completion real1/R2 — the worker judged done, the output had never entered git history, and nobody in the swarm could see it (`54b1dd836`); v1 only checked that `git log -1 -- <path>` was non-empty, and a live machine slapped it on the spot (`28f7d5d41`) | propagation gate v2: check whether the artifact **entered history reachable from origin**, not whether a local file exists |
+| **T9** | **Trust can be bought only with a real change**: rerunning a task whose criterion was already met is a no-op. No points added, no points removed | E014: 17 items let through at once; afterward 7 of them were no-op score farming — **sampling-level strictness was used at trust L1** (`0f167ca4d` / `d121dc721`) | the no-op gate blocks before quota is burned + the fourth state `moot` has its own namespace (it does not enter the credit ledger) + inspection intensity is tiered by trust (full check / sample / exempt) |
 
 ---
 
-## T1 落地方式（接新 runtime 时照做）
+## How T1 lands (do this when wiring a new runtime)
 
-在 `bin/cortex-loop-adapters/<新runtime>.sh` 头部写一行：
+Write one line at the top of `bin/cortex-loop-adapters/<new-runtime>.sh`:
 
 ```bash
 # cortex-loop:requires-env PATH HTTP_PROXY ...
 ```
 
-`env-parity.sh` 会自动把它纳入校验，**引擎与门都不用改**。
+`env-parity.sh` picks it up automatically. **Neither the engine nor the gate needs a change.**
 
 ---
 
-## 元模式：每一道新门，首日必被自己的实测打脸
+## Meta-pattern: every new gate is slapped by its own live check on day one
 
-传播门 v1（9:00 立 → 10:52 被证伪）· PULSE（8:56 立 → 9:09 修自己首日暴露的两个缺陷）·
-`991016f78`「负向测试逮到我自己的修复是死的」。
+Propagation gate v1 (set at 9:00 → falsified at 10:52) · PULSE (set at 8:56 → two defects it exposed on day one were fixed at 9:09) ·
+`991016f78`, "a negative test caught my own fix being dead".
 
-**推论**：门立完不算完成，**门被自己的测试红过一次才算**。
-所以 suite 里每个负向测试都要经破坏性验证 —— 不验证「真的会红」的测试，本身就是一道假门。
-（这条已在 [[cortex-loop/JOURNAL|JOURNAL.md]] §三个反复出现的元模式 立档；是否升格为律见 [[cortex-loop/EXPECTATIONS|EXPECTATIONS.md]] §候选律。）
+**Corollary**: setting the gate is not completion. **The gate counts only after its own test has gone red once.**
+So every negative test in the suite must pass a destructive check — a test that does not prove "it really goes red" is itself a fake gate.
+(This is already filed in [[cortex-loop/JOURNAL|JOURNAL.md]] §three meta-patterns that kept reappearing. Whether it is promoted to a law is in [[cortex-loop/EXPECTATIONS|EXPECTATIONS.md]] §candidate laws.)
 
 ---
 
@@ -55,4 +57,4 @@ T1–T6 立于 2026-07-28（`c858a9ef9`）；**T7–T9 立于 2026-07-29**，因
 ---
 
 <!-- cortex:map-backlink d-8c94cb5cf6b251f5ea1f210b -->
-关联地图：[[skills/cortex-loop/MAP|Cortex Loop 全景地图]]
+Related map: [[skills/cortex-loop/MAP|Cortex Loop panorama]]

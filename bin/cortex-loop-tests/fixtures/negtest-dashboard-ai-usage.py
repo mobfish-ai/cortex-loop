@@ -197,17 +197,17 @@ with tempfile.TemporaryDirectory(prefix="cortex-dashboard-ai-") as tmp:
     check("human dashboard exits zero", human.returncode == 0, human.stderr[:300])
     check(
         "human view labels both sources and all four channels",
-        "AI 用量（本地观测 ≠ 官方实时额度）" in human.stdout
+        "AI usage (local observation != official live quota)" in human.stdout
         and all(name in human.stdout for name in ("Claude", "Codex", "MiniMax", "GLM"))
-        and "本地=" in human.stdout
-        and "官方=" in human.stdout
+        and "local=" in human.stdout
+        and "official=" in human.stdout
         and "[src:" in human.stdout,
         human.stdout[-1800:],
     )
     check(
         "human view renders missing token/quota as UNKNOWN",
         "openclaw_reported_tokens=UNKNOWN" in human.stdout
-        and "官方=UNKNOWN" in human.stdout,
+        and "official=UNKNOWN" in human.stdout,
         human.stdout[-1800:],
     )
 

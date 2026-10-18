@@ -1,37 +1,37 @@
 #!/usr/bin/env bash
-# cortex-loop adapter: hive — HIVE 模式 sub-agent 派发执行器
+# cortex-loop adapter: hive — HIVE-mode sub-agent dispatch executor
 # cortex-loop:requires-env PATH
-# 约定接口：$1=提示词文件  $2=结果文件
+# Contract: $1=prompt file  $2=result file
 #
-# 用途：cortex-loop 通过本 adapter 发起 HIVE 派发任务。
-# 提示词文件格式（hive skill 的派发 prompt 规范）：
+# Purpose: cortex-loop starts a HIVE dispatch through this adapter.
+# Prompt file format (hive skill dispatch prompt):
 #   task_id=<id>
 #   plan_id=<plan>
 #   node=<dispatcher>
 #   ---
-#   <提示词正文>
+#   <prompt body>
 #
-# 即兴任务（task_id 以 adhoc- 开头）：在派发同一时刻写入 claim ref，
-# 不等先建任务卡。claim 写入后 adapter 立即返回 dispatched 状态，
-# 实际的 sub-agent 执行由主线程后续通过 HIVE skill 发起。
+# Ad-hoc tasks (task_id starts with adhoc-): write the claim ref at dispatch time,
+# without creating a task card first. After the claim is written the adapter returns dispatched immediately.
+# The main thread later starts the real sub-agent through the HIVE skill.
 set -uo pipefail
 PROMPT="$1"; RESULT="$2"
 OB1_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
-# 解析提示词文件里的任务元信息
+# Parse task metadata from the prompt file
 TASK_ID="$(sed -n 's/^task_id=//p' "$PROMPT" 2>/dev/null | head -1)"
 PLAN_ID="$(sed -n 's/^plan_id=//p' "$PROMPT" 2>/dev/null | head -1)"
 NODE="$(sed -n 's/^node=//p' "$PROMPT" 2>/dev/null | head -1)"
 DISPATCHER="${NODE:-orchestrator}"
 
-# 即兴任务 id 格式：adhoc-<epoch>-<dispatcher>
+# Ad-hoc task id format: adhoc-<epoch>-<dispatcher>
 if [[ "$TASK_ID" =~ ^adhoc-[0-9]+ ]]; then
   ADHOC_CLAIM="adhoc-claim"
 else
   ADHOC_CLAIM=""
 fi
 
-# 写入 spotlight 心跳日志（供 cortex-trace.sh 追溯）
+# Write a spotlight heartbeat log (for cortex-trace.sh)
 mkdir -p /tmp/spotlight
 SPOTLIGHT_LOG="/tmp/spotlight/hive-$(date +%s)-${TASK_ID:-unknown}.log"
 {
@@ -44,7 +44,7 @@ SPOTLIGHT_LOG="/tmp/spotlight/hive-$(date +%s)-${TASK_ID:-unknown}.log"
   echo "status=dispatched"
 } > "$SPOTLIGHT_LOG"
 
-# 立即写入 RESULT（adapter 约定：$2 是执行结果文件）
+# Write RESULT immediately (adapter contract: $2 is the result file)
 {
   echo "[hive adapter]"
   echo "executor=hive"

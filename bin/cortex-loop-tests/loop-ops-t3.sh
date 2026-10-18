@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-# T3 反测哨兵：这个测试永远应该红。它变绿 = 完成门被放宽了。
-echo "T3 是反测哨兵，永远返回 1"; exit 1
+# T3 negative sentinel: this test must stay red forever. Turning green means the completion gate was loosened.
+echo "T3 is a negative sentinel and always returns 1"; exit 1
