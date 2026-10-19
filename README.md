@@ -2,6 +2,8 @@ English | [简体中文](README.zh-CN.md)
 
 # cortex-loop
 
+> **See it in 60 seconds:** [Done is a check result, not a claim](https://huggingface.co/spaces/mars-republic/cortex-loop-demo?utm_source=github&utm_medium=readme&utm_campaign=cortex_loop_demo) — a public demo of one loop tick (`tick -> propose -> check -> try-complete`) where two of five items are refused because the evidence does not match. No model call, no server.
+
 cortex-loop is the swarm-node heartbeat engine. It keeps a git ledger, a clock, and the lease / swarm / tick coordination that moves declared work forward when nobody is watching.
 
 The ledger is the source of truth (`CLOCK.md` for the schedule, `TASKS.md` for the work). The heartbeat (`tick`, `health`, `reconcile`) is plain code and does not call a model. Adapters under `bin/cortex-loop-adapters/` are replaceable muscle. Only `try-complete` may write `status=done`, and only after the artifact, the short test, and propagation checks pass. A model may propose work or veto it. It may not approve completion.
